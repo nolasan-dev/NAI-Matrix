@@ -4,26 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>NAI Matrix</title>
-
+  <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-MSP78GR4"></script>
   <script>
-    window.GA_MEASUREMENT_ID = 'G-4KPG85GE69';
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
-    if (window.GA_MEASUREMENT_ID && window.GA_MEASUREMENT_ID !== 'G-4KPG85GE69') {
-      var gaScript = document.createElement('script');
-      gaScript.async = true;
-      gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.GA_MEASUREMENT_ID;
-      document.head.appendChild(gaScript);
-      gtag('js', new Date());
-      gtag('config', window.GA_MEASUREMENT_ID);
-    }
-    window.trackEvent = function(eventName, params) {
-      if (window.GA_MEASUREMENT_ID && window.GA_MEASUREMENT_ID !== 'G-4KPG85GE69' && typeof gtag === 'function') {
-        gtag('event', eventName, params || {});
-      }
-    };
+    gtag('js', new Date());
   </script>
-
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
