@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NAI Matrix</title>
+
+  <!-- =====================================================================
+       Google Analytics 4 (GA4) 設定エリア
+       GitHub Pages公開後、取得した測定IDに書き換えてください (例: 'G-ABC1234567')
+       ===================================================================== -->
+  <script>
+    window.GA_MEASUREMENT_ID = 'G-XXXXXXXXXX';
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    if (window.GA_MEASUREMENT_ID && window.GA_MEASUREMENT_ID !== 'G-XXXXXXXXXX') {
+      var gaScript = document.createElement('script');
+      gaScript.async = true;
+      gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.GA_MEASUREMENT_ID;
+      document.head.appendChild(gaScript);
+      gtag('js', new Date());
+      gtag('config', window.GA_MEASUREMENT_ID);
+    }
+    window.trackEvent = function(eventName, params) {
+      if (window.GA_MEASUREMENT_ID && window.GA_MEASUREMENT_ID !== 'G-XXXXXXXXXX' && typeof gtag === 'function') {
+        gtag('event', eventName, params || {});
+      }
+    };
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    body { -webkit-tap-highlight-color: transparent; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }
+
+    /* 日付未入力時の yyyy/mm/dd プレースホルダー統一表示 */
+    input.date-custom { position: relative; }
+    input.date-custom.is-empty:not(:focus) { color: transparent; }
+    input.date-custom.is-empty:not(:focus)::-webkit-datetime-edit { color: transparent; }
+    input.date-custom.is-empty:not(:focus)::before {
+      content: attr(data-placeholder);
+      position: absolute;
+      left: 0.125rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      pointer-events: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      letter-spacing: -0.02em;
+    }
+
+    /* PC版 / モバイル版 切替制御 */
+    body.mode-pc .mobile-only { display: none !important; }
+    body.mode-mobile .pc-only { display: none !important; }
+
+    /* 日本語 / 英語 切替制御 */
+    body.lang-ja .lang-en-only { display: none !important; }
+    body.lang-en .lang-ja-only { display: none !important; }
+
+    /* =====================================================================
+       ヘッダーレイアウト: PC版
+       ・「JP」と「一覧」が常にピタッと隣り合う左詰め連結配置
+       ・NSFWと期間ボックスが絶対に重ならない幅制御
+       ===================================================================== */
+    body.mode-pc #mainHeader {
+      padding: 0.5rem 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.5rem 0.5rem;
+    }
+    body.mode-pc #hdrBrandGroup {
+      order: 1;
+      flex-shrink: 0;
+    }
+    body.mode-pc #hdrRightActions {
+      order: 2;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    body.mode-pc #hdrViewGroup {
+      display: flex;
+      background: #020617;
+      padding: 0.125rem;
+      border-radius: 0.5rem;
+      border: 1px solid #334155;
+      flex-shrink: 0;
+    }
+    body.mode-pc #hdrFileGroup {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
+    }
+    body.mode-pc #hdrSearchFilterGroup {
+      order: 3;
+      flex: 1 1 620px;
+      min-width: 0;
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    body.mode-pc #hdrSearchRow {
+      flex: 1 1 200px;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    body.mode-pc #hdrSearchBox {
+      flex: 1 1 120px;
+      min-width: 90px;
+    }
+    body.mode-pc #nsfwToggleLabel {
+      flex-shrink: 0;
+    }
+    body.mode-pc #hdrDateSortWrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+    body.mode-pc #hdrDateBox { order: 1; flex-shrink: 0; }
+    body.mode-pc #hdrSortBox { order: 2; flex-shrink: 0; }
+
+    /* 画面幅が狭い場合でもNSFWと日付欄が重ならないよう自動折り返し */
+    @media (max-width: 960px) {
+      body.mode-pc #hdrSearchFilterGroup {
+        flex-wrap: wrap;
+      }
+      body.mode-pc #hdrSearchRow {
+        flex: 1 1 100%;
+      }
+    }
+
+    /* ヘッダーレイアウト: モバイル版 */
+    body.mode-mobile #mainHeader {
+      padding: 0.5rem 0.625rem;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.4rem;
+    }
+    body.mode-mobile #hdrBrandGroup {
+      order: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 0;
+    }
+    body.mode-mobile #hdrRightActions { display: contents; }
+    body.mode-mobile #hdrFileGroup {
+      order: 2;
+      width: 100%;
+      margin-left: 0;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.25rem;
+    }
+    body.mode-mobile #hdrFileGroup > * {
+      width: 100%;
+      justify-content: center;
+      padding-left: 0.25rem;
+      padding-right: 0.25rem;
+    }
+    body.mode-mobile #hdrSearchFilterGroup {
+      order: 3;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+    body.mode-mobile #hdrSearchRow { width: 100%; display: flex; align-items: center; gap: 0.375rem; }
+    body.mode-mobile #hdrDateSortWrapper {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+      gap: 0.375rem;
+    }
+    @media (min-width: 640px) {
+      body.mode-mobile #hdrDateSortWrapper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    body.mode-mobile #hdrViewGroup {
+      order: 4;
+      width: 100%;
+      background: #020617;
+      padding: 0.2rem;
+      border-radius: 0.5rem;
+      border: 1px solid #334155;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.25rem;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans mode-pc lang-ja">
+
+  
+  <header id="mainHeader" class="bg-slate-800/95 backdrop-blur border-b border-slate-700 sticky top-0 z-40">
+    
+    <div id="hdrBrandGroup" class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <div id="brandLogoBtn" class="flex items-center gap-1.5 sm:gap-2 cursor-pointer group transition select-none min-w-0">
+        <div class="p-1.5 sm:p-2 bg-indigo-600 group-hover:bg-indigo-500 rounded-lg shadow transition shrink-0">
+          <i data-lucide="layers" class="w-4 h-4 sm:w-5 sm:h-5 text-white"></i>
+        </div>
+        <div class="truncate">
+          <h1 class="text-xs sm:text-base font-bold text-white group-hover:text-indigo-300 leading-tight transition truncate">NAI Matrix V1.0</h1>
+          <p class="pc-only text-[11px] text-slate-400">
+            <span class="lang-ja-only">NovelAI V3,V4.5,V5用画像管理データベース</span>
+            <span class="lang-en-only">Image Management DB for NovelAI V3, V4.5, V5</span>
+          </p>
+          <p class="mobile-only hidden sm:block text-xs text-slate-400 truncate">
+            <span class="lang-ja-only">NovelAI V3,V4.5,V5用画像管理データベース</span>
+            <span class="lang-en-only">Image Management DB for NovelAI V3, V4.5, V5</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto">
+        <button id="btnOpenHelp" title="使い方と仕様ガイド" class="px-1.5 py-1 sm:px-2.5 sm:py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-indigo-300 hover:text-white rounded-md sm:rounded-lg border border-indigo-500/30 flex items-center gap-1 select-none transition text-[11px] sm:text-xs shrink-0 font-medium">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400"></i>
+          <span class="pc-only"><span class="lang-ja-only">使い方</span><span class="lang-en-only">Help</span></span>
+          <span class="mobile-only hidden sm:inline"><span class="lang-ja-only">使い方</span><span class="lang-en-only">Help</span></span>
+        </button>
+
+        
+        <button id="btnOpenSupport" title="開発支援・機能リクエスト" class="px-1.5 py-1 sm:px-2.5 sm:py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-amber-300 hover:text-white rounded-md sm:rounded-lg border border-amber-500/30 flex items-center gap-1 select-none transition text-[11px] sm:text-xs shrink-0 font-medium">
+          <i data-lucide="coffee" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400"></i>
+          <span class="pc-only"><span class="lang-ja-only">支援</span><span class="lang-en-only">Support</span></span>
+          <span class="mobile-only hidden sm:inline"><span class="lang-ja-only">支援</span><span class="lang-en-only">Support</span></span>
+        </button>
+
+        
+        <button id="btnToggleUiMode" title="PC版 / モバイル版 レイアウト切替" class="px-1.5 py-1 sm:px-2 sm:py-1.5 bg-slate-900 hover:bg-slate-700 text-slate-300 hover:text-white rounded-md sm:rounded-lg border border-slate-700 flex items-center gap-1 select-none transition text-[10px] sm:text-xs shrink-0">
+          <i id="uiModeIcon" data-lucide="monitor" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span id="uiModeLabel">PC版</span>
+        </button>
+
+        
+        <button id="btnToggleLang" title="言語切替 / Switch Language" class="px-1.5 py-1 sm:px-2 sm:py-1.5 bg-slate-900 hover:bg-slate-700 text-indigo-300 hover:text-white rounded-md sm:rounded-lg border border-slate-700 flex items-center gap-1 select-none transition text-[10px] sm:text-xs font-mono font-bold shrink-0">
+          <i data-lucide="globe" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span id="langLabel">JP</span>
+        </button>
+      </div>
+    </div>
+
+    
+    <div id="hdrRightActions">
+      <div id="hdrViewGroup" class="select-none">
+        <button id="btnViewGallery" class="px-2.5 py-1 text-xs rounded font-medium bg-indigo-600 text-white flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="grid" class="w-3.5 h-3.5 shrink-0"></i>
+          <span class="truncate"><span class="lang-ja-only">一覧</span><span class="lang-en-only">Gallery</span></span>
+        </button>
+        <button id="btnViewMatrix" class="px-2.5 py-1 text-xs rounded font-medium text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="table" class="w-3.5 h-3.5 shrink-0"></i>
+          <span class="truncate"><span class="lang-ja-only">マトリクス</span><span class="lang-en-only">Matrix</span></span>
+        </button>
+        <button id="btnViewTags" class="px-2.5 py-1 text-xs rounded font-medium text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="tag" class="w-3.5 h-3.5 shrink-0"></i>
+          <span class="truncate"><span class="lang-ja-only">タグ一覧</span><span class="lang-en-only">Tags</span></span>
+        </button>
+        <button id="btnViewCharTags" class="px-2.5 py-1 text-xs rounded font-medium text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="users" class="w-3.5 h-3.5 shrink-0"></i>
+          <span class="pc-only truncate"><span class="lang-ja-only">キャラタグ一覧</span><span class="lang-en-only">Char Tags</span></span>
+          <span class="mobile-only truncate"><span class="lang-ja-only">キャラタグ</span><span class="lang-en-only">Char Tags</span></span>
+        </button>
+      </div>
+
+      <div id="hdrFileGroup">
+        
+        <label class="cursor-pointer px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-md sm:rounded-lg shadow flex items-center gap-1 transition select-none shrink-0">
+          <i data-lucide="upload" class="w-3.5 h-3.5 shrink-0"></i>
+          <span class="pc-only"><span class="lang-ja-only">画像一括読込</span><span class="lang-en-only">Import Images</span></span>
+          <span class="mobile-only truncate"><span class="lang-ja-only">読込</span><span class="lang-en-only">Import</span></span>
+          <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+        </label>
+
+        
+        <button id="btnExportZip" title="元画像を含めて高速分割ZIP保存（3,000枚または3.5GBごと自動分割）" class="px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md sm:rounded-lg border border-slate-600 flex items-center gap-1 select-none transition shrink-0">
+          <i data-lucide="archive" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+          <span class="pc-only"><span class="lang-ja-only">ZIP保存 (元画像込)</span><span class="lang-en-only">Export ZIP (Full)</span></span>
+          <span class="mobile-only truncate"><span class="lang-ja-only">ZIP保存</span><span class="lang-en-only">ZIP</span></span>
+        </button>
+
+        
+        <button id="btnExportLightZip" title="サムネイルとメタデータのみを高速ZIP保存" class="px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-md sm:rounded-lg border border-indigo-500/40 flex items-center gap-1 select-none transition shrink-0">
+          <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+          <span class="pc-only"><span class="lang-ja-only">軽量ZIP</span><span class="lang-en-only">Light ZIP</span></span>
+          <span class="mobile-only truncate"><span class="lang-ja-only">軽量ZIP</span><span class="lang-en-only">Light</span></span>
+        </button>
+
+        
+        <label id="lblRestoreZip" title="バックアップZIPファイルから一括完全復元（複数同時選択対応）" class="cursor-pointer px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md sm:rounded-lg border border-slate-600 flex items-center gap-1 select-none transition shrink-0">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+          <span class="truncate"><span class="lang-ja-only">復元</span><span class="lang-en-only">Restore</span></span>
+          <input type="file" id="zipRestoreInput" accept=".zip" multiple class="hidden">
+        </label>
+
+        
+        <button id="btnClearAllDB" title="全データ初期化" class="px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 rounded-md sm:rounded-lg border border-rose-800/60 flex items-center gap-1 transition select-none shrink-0">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400 shrink-0"></i>
+          <span class="pc-only"><span class="lang-ja-only">一括消去</span><span class="lang-en-only">Clear All</span></span>
+          <span class="mobile-only truncate"><span class="lang-ja-only">消去</span><span class="lang-en-only">Clear</span></span>
+        </button>
+      </div>
+    </div>
+
+    
+    <div id="hdrSearchFilterGroup">
+      <div id="hdrSearchRow" class="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2">
+        <div id="hdrSearchBox" class="flex-1 min-w-0 relative">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input type="text" id="searchInput" placeholder="タグ検索 (例: 2026/11/05, 1girl)、または &quot;全文&quot;..." autocomplete="off"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-8 py-1.5 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-500">
+          <button id="btnClearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+            <i data-lucide="x-circle" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        
+        <label id="nsfwToggleLabel" class="flex items-center gap-1.5 bg-slate-950 border border-slate-700 hover:border-rose-500/50 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer select-none shrink-0 transition" title="ON: 全件表示 / OFF: NSFWタグを含む画像を一覧から除外">
+          <input type="checkbox" id="nsfwToggle" checked class="w-3.5 h-3.5 accent-rose-500 rounded cursor-pointer">
+          <span class="font-semibold text-rose-300">NSFW</span>
+        </label>
+      </div>
+
+      
+      <div id="hdrDateSortWrapper">
+        <div id="hdrDateBox" class="flex items-center justify-between bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs shrink-0" title="作成日の期間で絞り込み（未指定なら全期間ANY）">
+          <div class="flex items-center text-slate-400 mr-1 shrink-0 pointer-events-none">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-indigo-400 mr-1 shrink-0"></i>
+            <span class="mobile-only"><span class="lang-ja-only">期間:</span><span class="lang-en-only">Date:</span></span>
+          </div>
+          <div class="flex items-center gap-1 justify-end min-w-0">
+            <input type="date" id="dateFromInput" data-placeholder="yyyy/mm/dd" class="date-custom is-empty bg-transparent text-slate-200 focus:outline-none text-[11px] font-mono cursor-pointer w-[98px]" title="開始日 (未指定でANY)">
+            <span class="text-slate-500">〜</span>
+            <input type="date" id="dateToInput" data-placeholder="yyyy/mm/dd" class="date-custom is-empty bg-transparent text-slate-200 focus:outline-none text-[11px] font-mono cursor-pointer w-[98px]" title="終了日 (未指定でANY)">
+            <button id="btnClearDateRange" title="期間指定をクリア (ANYに戻す)" class="hidden ml-0.5 text-slate-500 hover:text-slate-300">
+              <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        
+        <div id="hdrSortBox" class="flex items-center bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs shrink-0">
+          <div class="flex items-center text-slate-400 mr-1.5 shrink-0 pointer-events-none">
+            <i data-lucide="arrow-down-up" class="w-3.5 h-3.5 text-indigo-400 mr-1"></i>
+            <span class="mobile-only"><span class="lang-ja-only">並び順:</span><span class="lang-en-only">Sort:</span></span>
+          </div>
+          <select id="sortSelect" aria-label="並び順" class="w-full bg-transparent text-slate-200 focus:outline-none cursor-pointer text-xs">
+            <option id="optSortDateDesc" value="createdAt_desc" class="bg-slate-900 text-slate-200">作成日時 (新しい順)</option>
+            <option id="optSortDateAsc" value="createdAt_asc" class="bg-slate-900 text-slate-200">作成日時 (古い順)</option>
+            <option id="optSortNameAsc" value="fileName_asc" class="bg-slate-900 text-slate-200">ファイル名 (昇順)</option>
+            <option id="optSortNameDesc" value="fileName_desc" class="bg-slate-900 text-slate-200">ファイル名 (降順)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  
+  <div id="progressContainer" class="hidden bg-slate-800 border-b border-indigo-500/30 px-4 sm:px-6 py-2.5 select-none">
+    <div class="flex items-center justify-between text-xs text-slate-300 mb-1">
+      <span id="progressStatus" class="font-medium truncate mr-2">処理中...</span>
+      <span id="progressStats" class="font-mono text-slate-400 shrink-0">0 / 0</span>
+    </div>
+    <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-700">
+      <div id="progressBar" class="bg-indigo-500 h-full w-0 transition-all duration-100"></div>
+    </div>
+  </div>
+
+  
+  <div id="paginationBar" class="bg-slate-950/80 border-b border-slate-800 px-2.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs">
+    <div class="flex items-center gap-1.5 sm:gap-2 truncate">
+      <span class="pc-only text-slate-400"><span class="lang-ja-only">総登録件数:</span><span class="lang-en-only">Total:</span></span>
+      <span class="mobile-only text-slate-400"><span class="lang-ja-only">総数:</span><span class="lang-en-only">Total:</span></span>
+      <span id="totalItemsCount" class="font-mono text-indigo-400 font-bold">0</span>
+      <span class="text-slate-600">|</span>
+      <span id="filterCount" class="text-slate-400 truncate">0 件 表示対象</span>
+    </div>
+
+    <div class="flex items-center gap-1.5 sm:gap-2 select-none shrink-0 ml-auto">
+      <button id="btnPrevPage" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition">
+        <span class="lang-ja-only">前へ</span><span class="lang-en-only">Prev</span>
+      </button>
+      <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded px-2 py-0.5">
+        <input type="number" id="pageJumpInput" min="1" value="1"
+          class="w-12 sm:w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-center font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
+          title="移動したいページ番号を入力">
+        <span class="text-slate-400 font-mono text-[11px]">/ <span id="maxPageNum">1</span> <span class="pc-only"><span class="lang-ja-only">ページ</span><span class="lang-en-only">Pages</span></span><span class="mobile-only"><span class="lang-ja-only">頁</span><span class="lang-en-only">p.</span></span></span>
+        <button id="btnJumpPage" class="ml-1 px-2.5 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium transition">
+          <span class="lang-ja-only">移動</span><span class="lang-en-only">Go</span>
+        </button>
+      </div>
+      <button id="btnNextPage" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition">
+        <span class="lang-ja-only">次へ</span><span class="lang-en-only">Next</span>
+      </button>
+    </div>
+  </div>
+
+  
+  <main id="mainContent" class="flex-1 p-2.5 sm:p-4 overflow-y-auto flex flex-col">
+    <div id="galleryView" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2.5 sm:gap-3"></div>
+
+    <div id="matrixView" class="hidden overflow-x-auto border border-slate-700 rounded-lg shadow-lg">
+      <table id="matrixTable" class="w-full text-left text-xs text-slate-300 border-collapse">
+        <thead id="matrixThead" class="bg-slate-800 text-slate-200 uppercase tracking-wider border-b border-slate-700 font-semibold sticky top-0 z-10">
+          <tr>
+            <th class="p-3 w-36 text-center"><span class="lang-ja-only">画像</span><span class="lang-en-only">Image</span></th>
+            <th class="p-3 w-36"><span class="lang-ja-only">作成日時 / Seed</span><span class="lang-en-only">Date / Seed</span></th>
+            <th class="p-3 w-1/4"><span class="lang-ja-only">メインプロンプト</span><span class="lang-en-only">Main Prompt</span></th>
+            <th class="p-3 w-1/5"><span class="lang-ja-only">メイン除外 (UC)</span><span class="lang-en-only">Negative (UC)</span></th>
+            <th class="p-3"><span class="lang-ja-only">キャラクター別プロンプト & 除外</span><span class="lang-en-only">Character Prompts & UC</span></th>
+            <th class="p-3 w-28 text-center"><span class="lang-ja-only">操作</span><span class="lang-en-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="matrixTableBody" class="divide-y divide-slate-800 bg-slate-900/60"></tbody>
+      </table>
+    </div>
+
+    
+    <div id="tagsView" class="hidden max-w-6xl mx-auto w-full space-y-4">
+      <div class="bg-slate-800/90 border border-slate-700 p-3 sm:p-4 rounded-xl space-y-3 sticky top-0 z-20 shadow-xl backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <i data-lucide="tags" class="w-5 h-5 text-indigo-400"></i>
+              <span class="lang-ja-only">タグ一覧（複数選択・連動AND絞り込み）</span>
+              <span class="lang-en-only">All Tags (Multi-Select & Co-occurring AND Filter)</span>
+            </h2>
+            <p class="pc-only text-xs text-slate-400 mt-0.5">
+              <span class="lang-ja-only">タグをクリックすると、そのタグと共存する関連タグのみに絞り込まれます（0件は自動非表示・除外プロンプトは対象外）。<kbd class="px-1.5 py-0.5 bg-slate-950 border border-slate-700 rounded text-slate-300 font-mono">Ctrl + F</kbd> でも検索可能です。</span>
+              <span class="lang-en-only">Click tags to narrow down to co-occurring related tags (0-count tags are hidden; negative prompts excluded). You can also use <kbd class="px-1.5 py-0.5 bg-slate-950 border border-slate-700 rounded text-slate-300 font-mono">Ctrl + F</kbd>.</span>
+            </p>
+            <p class="mobile-only text-[11px] sm:text-xs text-slate-400 mt-0.5 leading-relaxed">
+              <span class="lang-ja-only">タグをタップすると共存する関連タグのみに絞り込まれます（0件は自動非表示・除外プロンプトは対象外）。</span>
+              <span class="lang-en-only">Tap tags to narrow down to co-occurring related tags (0-count tags are hidden; negative prompts excluded).</span>
+            </p>
+          </div>
+          <div class="flex items-center gap-2 text-xs w-full sm:w-auto">
+            <input type="text" id="tagFilterInput" placeholder="タグ名で絞り込む..." class="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-48">
+          </div>
+        </div>
+
+        <div id="selectedTagsPanel" class="bg-slate-950/70 border border-slate-800 p-3 rounded-lg flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-1.5 flex-1" id="selectedTagsList"></div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button id="btnClearSelectedTags" class="hidden px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition">
+              <span class="lang-ja-only">全解除</span><span class="lang-en-only">Clear All</span>
+            </button>
+            <button id="btnApplyTagFilter" class="hidden px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded text-xs shadow flex items-center gap-1.5 transition">
+              <i data-lucide="filter" class="w-3.5 h-3.5"></i> <span id="btnApplyTagFilterText">選択したタグでAND検索</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="tagCloudContainer" class="flex flex-wrap gap-2.5 pt-2"></div>
+    </div>
+
+    
+    <div id="charTagsView" class="hidden max-w-6xl mx-auto w-full space-y-4">
+      <div class="bg-slate-800/90 border border-slate-700 p-3 sm:p-4 rounded-xl space-y-3 sticky top-0 z-20 shadow-xl backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <i data-lucide="users" class="w-5 h-5 text-indigo-400"></i>
+              <span class="pc-only"><span class="lang-ja-only">キャラクタータグ一覧（キャラ枠専用・連動AND絞り込み）</span><span class="lang-en-only">Character Tags (Character Slot Only & Co-occurring AND Filter)</span></span>
+              <span class="mobile-only"><span class="lang-ja-only">キャラタグ一覧（キャラ枠専用・連動AND絞り込み）</span><span class="lang-en-only">Character Tags (Char Slot Only & AND Filter)</span></span>
+            </h2>
+            <p class="pc-only text-xs text-slate-400 mt-0.5">
+              <span class="lang-ja-only">キャラクター別プロンプト枠内のタグのみを集計しています。クリックすると共存する関連キャラタグのみに絞り込まれます（0件は自動非表示・除外は対象外）。</span>
+              <span class="lang-en-only">Aggregates tags exclusively from character prompt slots. Click to narrow down to co-occurring character tags (0-count hidden; UC excluded).</span>
+            </p>
+            <p class="mobile-only text-[11px] sm:text-xs text-slate-400 mt-0.5 leading-relaxed">
+              <span class="lang-ja-only">キャラクター別プロンプト枠内のタグのみを集計しています。タップすると共存する関連キャラタグのみに絞り込まれます。</span>
+              <span class="lang-en-only">Aggregates tags from character prompt slots only. Tap to filter co-occurring character tags.</span>
+            </p>
+          </div>
+          <div class="flex items-center gap-2 text-xs w-full sm:w-auto">
+            <input type="text" id="charTagFilterInput" placeholder="キャラタグ名で絞り込む..." class="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-48">
+          </div>
+        </div>
+
+        <div id="selectedCharTagsPanel" class="bg-slate-950/70 border border-slate-800 p-3 rounded-lg flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-1.5 flex-1" id="selectedCharTagsList"></div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button id="btnClearSelectedCharTags" class="hidden px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition">
+              <span class="lang-ja-only">全解除</span><span class="lang-en-only">Clear All</span>
+            </button>
+            <button id="btnApplyCharTagFilter" class="hidden px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded text-xs shadow flex items-center gap-1.5 transition">
+              <i data-lucide="filter" class="w-3.5 h-3.5"></i> <span id="btnApplyCharTagFilterText">選択したキャラタグでAND検索</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="charTagCloudContainer" class="flex flex-wrap gap-2.5 pt-2"></div>
+    </div>
+
+    <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-slate-500 select-none">
+      <i data-lucide="image-off" class="w-12 h-12 mb-3 stroke-[1.5]"></i>
+      <p id="emptyStateText" class="text-sm">
+        <span class="lang-ja-only">画像データがありません。</span>
+        <span class="lang-en-only">No image data found.</span>
+      </p>
+    </div>
+
+    
+    <div id="bottomPaginationBar" class="mt-6 bg-slate-950/90 border border-slate-800 rounded-lg px-2.5 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs">
+      <div class="flex items-center gap-1.5 sm:gap-2 truncate">
+        <span class="pc-only text-slate-400"><span class="lang-ja-only">総登録件数:</span><span class="lang-en-only">Total:</span></span>
+        <span class="mobile-only text-slate-400"><span class="lang-ja-only">総数:</span><span class="lang-en-only">Total:</span></span>
+        <span id="bottomTotalItemsCount" class="font-mono text-indigo-400 font-bold">0</span>
+        <span class="text-slate-600">|</span>
+        <span id="bottomFilterCount" class="text-slate-400 truncate">0 件 表示対象</span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 select-none shrink-0 ml-auto">
+        <button id="btnPrevPageBottom" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          <span class="lang-ja-only">前へ</span><span class="lang-en-only">Prev</span>
+        </button>
+        <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded px-2 py-0.5">
+          <input type="number" id="pageJumpInputBottom" min="1" value="1"
+            class="w-12 sm:w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-center font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
+            title="移動したいページ番号を入力">
+          <span class="text-slate-400 font-mono text-[11px]">/ <span id="maxPageNumBottom">1</span> <span class="pc-only"><span class="lang-ja-only">ページ</span><span class="lang-en-only">Pages</span></span></span>
+          <button id="btnJumpPageBottom" class="ml-1 px-2.5 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium transition">
+            <span class="lang-ja-only">移動</span><span class="lang-en-only">Go</span>
+          </button>
+        </div>
+        <button id="btnNextPageBottom" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          <span class="lang-ja-only">次へ</span><span class="lang-en-only">Next</span>
+        </button>
+        <button id="btnScrollTop" title="ページの最上部へ戻る" class="ml-1 sm:ml-2 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded border border-slate-700 flex items-center gap-1 transition">
+          <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
+          <span class="pc-only"><span class="lang-ja-only">最上部へ</span><span class="lang-en-only">Top</span></span>
+          <span class="mobile-only"><span class="lang-ja-only">上へ</span><span class="lang-en-only">Top</span></span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  
+  <div id="supportModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border-t sm:border border-slate-700 rounded-t-2xl sm:rounded-xl max-w-lg w-full flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-5 py-3.5 bg-slate-800 border-b border-slate-700 flex items-center justify-between select-none">
+        <div class="flex items-center gap-2">
+          <i data-lucide="coffee" class="w-5 h-5 text-amber-400"></i>
+          <h2 class="text-sm font-semibold text-white">
+            <span class="lang-ja-only">開発支援・リクエストについて</span>
+            <span class="lang-en-only">Support & Feature Requests</span>
+          </h2>
+        </div>
+        <button id="supportModalCloseBtn" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs leading-relaxed text-slate-300">
+        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
+          <p class="lang-ja-only text-slate-200 leading-relaxed">
+            本ツールは無償で公開しています。もし気に入っていただけましたら、温かいご支援をいただけると継続的な開発・メンテナンスの大きな励みになります！
+          </p>
+          <p class="lang-ja-only text-amber-200/90 bg-amber-950/30 border border-amber-500/20 p-3 rounded-lg leading-relaxed">
+            💡 <strong>ご要望・新規ツールのアイデアも募集中！</strong><br>
+            支援時の応援メッセージに「こんな追加機能がほしい」「こんな新規ツールを開発してほしい」といったご要望も添えていただけると大変励みになります。
+          </p>
+
+          <p class="lang-en-only text-slate-200 leading-relaxed">
+            This tool is available for free. If you find it useful, your kind support would mean a lot and keep me motivated for continuous development and maintenance!
+          </p>
+          <p class="lang-en-only text-amber-200/90 bg-amber-950/30 border border-amber-500/20 p-3 rounded-lg leading-relaxed">
+            💡 <strong>Feature Requests & New Tool Ideas Welcome!</strong><br>
+            Feel free to include feature requests or ideas for new tools in your support message—hearing your feedback is a huge encouragement!
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <a href="https://ofuse.me/4729099c" target="_blank" rel="noopener noreferrer"
+             onclick="trackEvent('click_donate', { platform: 'ofuse', source: 'support_modal' })"
+             class="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 transition select-none">
+            <i data-lucide="message-square-plus" class="w-4 h-4"></i>
+            <span><span class="lang-ja-only">OFUSE で支援・応援する</span><span class="lang-en-only">Support via OFUSE</span></span>
+          </a>
+          <a href="https://buymeacoffee.com/nolasan" target="_blank" rel="noopener noreferrer"
+             onclick="trackEvent('click_donate', { platform: 'buymeacoffee', source: 'support_modal' })"
+             class="px-4 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 transition select-none">
+            <i data-lucide="coffee" class="w-4 h-4"></i>
+            <span>Buy Me a Coffee</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-slate-800 border-t border-slate-700 flex justify-end select-none">
+        <button id="supportModalOkBtn" class="w-full sm:w-auto px-4 py-2 sm:py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-medium">
+          <span class="lang-ja-only">閉じる</span><span class="lang-en-only">Close</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  
+  <div id="helpModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border-t sm:border border-slate-700 rounded-t-2xl sm:rounded-xl max-w-3xl w-full max-h-[90dvh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-5 py-3.5 bg-slate-800 border-b border-slate-700 flex items-center justify-between select-none">
+        <div class="flex items-center gap-2">
+          <i data-lucide="help-circle" class="w-5 h-5 text-indigo-400"></i>
+          <h2 class="text-sm font-semibold text-white">
+            <span class="lang-ja-only">使い方・データベース仕様ガイド</span>
+            <span class="lang-en-only">User Guide & Database Specifications</span>
+          </h2>
+        </div>
+        <button id="helpModalCloseBtn" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      
+      <div class="lang-ja-only p-4 sm:p-5 overflow-y-auto space-y-4 text-xs leading-relaxed text-slate-300">
+        <div class="bg-indigo-950/40 border border-indigo-800/50 p-3.5 rounded-lg space-y-1.5">
+          <h3 class="font-bold text-indigo-300 text-sm flex items-center gap-1.5">
+            <i data-lucide="database" class="w-4 h-4 text-indigo-400"></i> データの保存場所
+          </h3>
+          <p>画像やプロンプトはお使いのブラウザ内部ストレージ（IndexedDB）に安全に保存されます。<br>ブラウザを閉じたりPC・端末を再起動してもデータはそのまま保持されます。<br>※ただし、iPhone（Safari）のIndexedDBはデフォルト仕様では7日で削除されます。必要に応じてその他のブラウザか設定変更をしてください。</p>
+          <p class="text-slate-400 text-[11px]">大量画像（3万枚以上）でもクラッシュしないよう、画像バイナリ（Blob）とメタデータを分離し<br>200画像単位でオンデマンド読み込み・自動メモリ解放を行う省メモリ設計を採用しています。</p>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+          <h3 class="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+            <i data-lucide="archive" class="w-4 h-4 text-indigo-400"></i> ZIP保存（全量 ＆ 軽量モード）と一括復元
+          </h3>
+          <p class="pc-only text-slate-400">別のPCやスマホへの移行や環境のバックアップで使用します。</p>
+          <ul class="list-disc list-inside space-y-1.5 text-slate-300 pl-1">
+            <li><strong class="text-indigo-400"><span class="pc-only">「ZIP保存 (元画像込)」</span><span class="mobile-only">「保存」</span></strong>: オリジナルの元画像を含めて保存します。標準ZIP規格の上限（4GB）を超えないよう、<strong>3,000枚（または3.5GB）ごとに自動的に分割ZIP（<code>part01.zip</code>, <code>part02.zip</code>...）</strong>として出力します。</li>
+            <li><strong class="text-amber-400"><span class="pc-only">「軽量ZIP」</span><span class="mobile-only">「軽量ZIP」</span></strong>: 元画像を除き、サムネイルとプロンプト等のメタデータのみを保存します。3万枚でも数百MBに収まるため、<strong>数十秒で出力</strong>でき、スマートフォンへの移行用に最適です。</li>
+            <li><strong class="text-indigo-400">「復元」（複数ZIP同時選択対応）</strong>: ファイル選択画面で分割された複数のZIPファイルを<strong>まとめて全選択（Ctrl+A等）</strong>するだけで、順番に一括で復元されます。</li>
+          </ul>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+          <h3 class="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+            <i data-lucide="search" class="w-4 h-4 text-indigo-400"></i> 個別ページ（詳細画面）の「完全一致検索」と「同一作成日検索」
+          </h3>
+          <ul class="list-disc list-inside space-y-1.5 text-slate-300">
+            <li><strong class="text-indigo-400">メインプロンプト完全一致検索</strong>: 画像詳細ページの<strong>「完全一致検索」</strong>ボタンを押すと、改行や空白の揺らぎを自動吸収し、<strong>その画像とメインプロンプト全文が完全に一致する画像（シード違い・差分など）のみ</strong>をピンポイントで一覧表示します（検索バーで <code class="text-indigo-300">"プロンプト全文"</code> と二重引用符で囲んで検索するのと同じ効果です）。</li>
+            <li><strong class="text-indigo-400">同一作成日を検索（作成日タグジャンプ）</strong>: 画像詳細ページの<strong>「同一作成日を検索（同一日検索）」</strong>ボタン、または一覧カード・マトリクス表・詳細画面の<strong>作成日バッジ（<code>YYYY/MM/DD</code>）</strong>をクリックすると、その日に作成された画像のみを瞬時に絞り込みます。</li>
+          </ul>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+          <h3 class="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+            <i data-lucide="calendar" class="w-4 h-4 text-indigo-400"></i> NSFW表示切替 ＆ 期間選択フィルタ ＆ 作成日タグAND検索
+          </h3>
+          <ul class="list-disc list-inside space-y-1.5 text-slate-300">
+            <li><strong class="text-rose-300">NSFWチェックボックス（ON:全件 / OFF:NSFW除外）</strong>: 検索バー右横の「NSFW」チェックボックスをONにすると全件表示、OFFにするとメインまたはキャラプロンプトに <code class="text-rose-300">nsfw</code> タグを含む画像を一覧から除外します（除外プロンプト内の <code class="text-rose-300">nsfw</code> は誤検知しません）。</li>
+            <li><strong class="text-indigo-400">期間選択（開始日〜終了日 / 未指定ならANY）</strong>: カレンダー入力欄で期間を指定できます。開始日のみ指定すれば「その日以降」、終了日のみなら「その日以前」、両方未指定（NULL）なら「全期間（ANY）」として動作します。</li>
+            <li><strong class="text-indigo-400">作成日タグ＋通常タグのAND検索</strong>: 各画像は <code class="text-indigo-300">2026/11/05</code>（日単位）や <code class="text-indigo-300">2026/11</code>（月単位）の作成日タグを自動的に持っています。検索バーに <code class="text-indigo-300">2026/11/05, 1girl, smile</code> のようにカンマ区切りで入力すると、<strong>「特定の日（または月）に作成され、かつ指定タグを含む画像」</strong>をAND検索できます。</li>
+          </ul>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-1.5">
+          <h3 class="font-bold text-slate-100 text-sm flex items-center gap-2">
+            <i data-lucide="users" class="w-4 h-4 text-indigo-400"></i> タグ一覧 ＆ キャラタグ一覧
+          </h3>
+          <ul class="list-disc list-inside space-y-1 text-slate-300">
+            <li><strong>タグ一覧</strong>: メインプロンプトとキャラクタープロンプトの全タグを対象に連動AND絞り込みを行えます。</li>
+            <li><strong>キャラタグ一覧</strong>: キャラクター別プロンプト枠に設定されたタグのみを独立して集計・連動AND絞り込みできます。</li>
+          </ul>
+        </div>
+
+        
+        <div class="bg-slate-950 p-4 rounded-xl border border-amber-500/30 space-y-3">
+          <h3 class="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+            <i data-lucide="coffee" class="w-4 h-4 text-amber-400"></i> 開発支援・新規ツールや追加機能のリクエスト
+          </h3>
+          <p class="text-slate-200 leading-relaxed">
+            本ツールは無償で公開しています。気に入っていただけましたら、ご支援をいただけると開発・維持の大きな励みになります！<br>
+            また、応援メッセージに<strong>「こんな追加機能がほしい」「こんな新規ツールを開発してほしい」</strong>といったご要望やアイデアも書いていただけると大変励みになります。
+          </p>
+          <div class="flex flex-wrap items-center gap-2.5 pt-1">
+            <a href="https://ofuse.me/4729099c" target="_blank" rel="noopener noreferrer"
+               onclick="trackEvent('click_donate', { platform: 'ofuse', source: 'help_modal' })"
+               class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow flex items-center gap-1.5 transition">
+              <i data-lucide="message-square-plus" class="w-3.5 h-3.5"></i>
+              <span>OFUSE で支援・リクエストを送る</span>
+            </a>
+            <a href="https://buymeacoffee.com/nolasan" target="_blank" rel="noopener noreferrer"
+               onclick="trackEvent('click_donate', { platform: 'buymeacoffee', source: 'help_modal' })"
+               class="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow flex items-center gap-1.5 transition">
+              <i data-lucide="coffee" class="w-3.5 h-3.5"></i>
+              <span>Buy Me a Coffee</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="lang-en-only p-4 sm:p-5 overflow-y-auto space-y-4 text-xs leading-relaxed text-slate-300">
+        <div class="bg-indigo-950/40 border border-indigo-800/50 p-3.5 rounded-lg space-y-1.5">
+          <h3 class="font-bold text-indigo-300 text-sm flex items-center gap-1.5">
+            <i data-lucide="database" class="w-4 h-4 text-indigo-400"></i> Data Storage & Memory Optimization
+          </h3>
+          <p>All images and prompts are safely stored inside your browser's internal storage (IndexedDB). Your data remains intact even after closing the browser or restarting your device.</p>
+          <p class="text-slate-400 text-[11px]">Designed to handle 30,000+ images without crashing by separating raw image blobs from metadata, loading 200 items per page on demand, and automatically releasing ObjectURLs.</p>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+          <h3 class="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+            <i data-lucide="archive" class="w-4 h-4 text-indigo-400"></i> Zero-Copy Fast ZIP Backup (Auto-Split) & Batch Restore
+          </h3>
+          <ul class="list-disc list-inside space-y-1.5 text-slate-300 pl-1">
+            <li><strong class="text-indigo-400">Export ZIP (Full)</strong>: Exports original images and metadata using a zero-copy ZIP engine. Automatically splits archives every <strong>3,000 images (or 3.5GB)</strong> into <code>part01.zip</code>, <code>part02.zip</code>, etc.</li>
+            <li><strong class="text-amber-400">Light ZIP</strong>: Exports only WebP thumbnails and metadata. Completes in seconds even for 30,000+ images—ideal for mobile migration.</li>
+            <li><strong class="text-indigo-400">Restore (Multi-ZIP Support)</strong>: Select multiple split ZIP files at once to batch-restore and merge them automatically.</li>
+          </ul>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+          <h3 class="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+            <i data-lucide="search" class="w-4 h-4 text-indigo-400"></i> Exact Prompt Match & Same-Date Search
+          </h3>
+          <ul class="list-disc list-inside space-y-1.5 text-slate-300">
+            <li><strong class="text-indigo-400">Exact Prompt Match</strong>: Click <strong>"Exact Match"</strong> in the detail modal (or wrap your query in quotes like <code class="text-indigo-300">"full prompt"</code>) to find variations sharing the exact same main prompt.</li>
+            <li><strong class="text-indigo-400">Same-Date Search</strong>: Click any date badge (<code>YYYY/MM/DD</code>) or the <strong>"Same Date"</strong> button to filter images created on that date.</li>
+          </ul>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+          <h3 class="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+            <i data-lucide="calendar" class="w-4 h-4 text-indigo-400"></i> NSFW Filter, Date Range & Date+Tag AND Search
+          </h3>
+          <ul class="list-disc list-inside space-y-1.5 text-slate-300">
+            <li><strong class="text-rose-300">NSFW Checkbox</strong>: Toggle ON to show all images, or OFF to exclude images containing the <code class="text-rose-300">nsfw</code> tag in positive prompts.</li>
+            <li><strong class="text-indigo-400">Date Range Filter</strong>: Specify start/end dates, or leave blank for all dates (ANY).</li>
+            <li><strong class="text-indigo-400">Date + Tag AND Search</strong>: Combine date tokens and tags with commas (e.g., <code class="text-indigo-300">2026/11/05, 1girl, smile</code>).</li>
+          </ul>
+        </div>
+
+        
+        <div class="bg-slate-950 p-4 rounded-xl border border-amber-500/30 space-y-3">
+          <h3 class="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+            <i data-lucide="coffee" class="w-4 h-4 text-amber-400"></i> Support & Feature Requests
+          </h3>
+          <p class="text-slate-200 leading-relaxed">
+            This tool is provided for free. If you find it helpful, your support would be a huge motivation for ongoing updates!<br>
+            Feel free to include <strong>feature requests or ideas for new tools</strong> in your support message—I'd love to hear from you!
+          </p>
+          <div class="flex flex-wrap items-center gap-2.5 pt-1">
+            <a href="https://buymeacoffee.com/nolasan" target="_blank" rel="noopener noreferrer"
+               onclick="trackEvent('click_donate', { platform: 'buymeacoffee', source: 'help_modal' })"
+               class="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow flex items-center gap-1.5 transition">
+              <i data-lucide="coffee" class="w-3.5 h-3.5"></i>
+              <span>Buy Me a Coffee</span>
+            </a>
+            <a href="https://ofuse.me/4729099c" target="_blank" rel="noopener noreferrer"
+               onclick="trackEvent('click_donate', { platform: 'ofuse', source: 'help_modal' })"
+               class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow flex items-center gap-1.5 transition">
+              <i data-lucide="message-square-plus" class="w-3.5 h-3.5"></i>
+              <span>Support via OFUSE</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-slate-800 border-t border-slate-700 flex justify-between items-center select-none">
+        <button id="helpToSupportBtn" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-700 text-amber-300 rounded border border-amber-500/30 text-xs flex items-center gap-1.5 transition">
+          <i data-lucide="coffee" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span class="lang-ja-only">支援・要望を送る</span><span class="lang-en-only">Support / Request</span>
+        </button>
+        <button id="helpModalOkBtn" class="px-4 py-2 sm:py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium">
+          <span class="lang-ja-only">閉じる</span><span class="lang-en-only">Close</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  
+  <div id="detailModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border-t sm:border border-slate-700 rounded-t-2xl sm:rounded-xl max-w-5xl w-full max-h-[92dvh] sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between gap-2 select-none">
+        <h2 id="modalTitle" class="text-xs sm:text-sm font-semibold text-white truncate max-w-md flex-1">詳細情報</h2>
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <button id="modalPrevBtn" class="p-1.5 hover:bg-slate-700 rounded text-slate-300"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+          <button id="modalNextBtn" class="p-1.5 hover:bg-slate-700 rounded text-slate-300"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+          <button id="modalEditBtn" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs ml-1 sm:ml-2 flex items-center gap-1">
+            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> <span><span class="lang-ja-only">編集</span><span class="lang-en-only">Edit</span></span>
+          </button>
+          <button id="modalDeleteBtn" class="px-2.5 py-1 bg-rose-900/80 hover:bg-rose-700 text-rose-200 rounded text-xs flex items-center gap-1">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> <span><span class="lang-ja-only">削除</span><span class="lang-en-only">Delete</span></span>
+          </button>
+          <button id="modalCloseBtn" class="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white ml-1 sm:ml-2"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+      <div class="p-3 sm:p-4 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        <div class="flex flex-col items-center justify-start bg-slate-950 p-2 rounded-lg border border-slate-800">
+          <img id="modalImage" class="max-h-[45vh] sm:max-h-[65vh] w-auto h-auto object-contain rounded cursor-pointer" alt="Preview" title="クリックで原寸全画面拡大">
+          <div class="mt-2 text-xs text-slate-400 flex flex-wrap items-center justify-center gap-3">
+            <div class="flex items-center gap-1.5">
+              <span class="pc-only"><span class="lang-ja-only">作成日時:</span><span class="lang-en-only">Created:</span></span>
+              <span class="mobile-only"><span class="lang-ja-only">日時:</span><span class="lang-en-only">Date:</span></span>
+              <button id="modalCreatedAt" class="px-1.5 py-0.5 bg-slate-900 hover:bg-indigo-600 text-slate-200 hover:text-white font-mono rounded border border-slate-700 hover:border-indigo-400 transition" title="クリックでこの作成日タグを検索">-</button>
+              <button id="btnSameDateSearch" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[10px] rounded border border-slate-700 text-indigo-300 flex items-center gap-1" title="この画像と同一作成日の画像を検索">
+                <i data-lucide="calendar" class="w-3 h-3 text-indigo-400"></i>
+                <span class="pc-only"><span class="lang-ja-only">同一作成日を検索</span><span class="lang-en-only">Same Date</span></span>
+                <span class="mobile-only"><span class="lang-ja-only">同一日検索</span><span class="lang-en-only">Same Date</span></span>
+              </button>
+            </div>
+            <div class="flex items-center gap-1">
+              <span>Seed:</span>
+              <span id="modalSeed" class="font-mono text-indigo-400 select-all">-</span>
+              <button id="btnCopySeed" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-[10px] rounded border border-slate-700 text-slate-300">
+                <span class="lang-ja-only">コピー</span><span class="lang-en-only">Copy</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col gap-3 text-xs">
+          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+            <div class="flex flex-wrap justify-between items-center gap-2 mb-1.5">
+              <span class="font-bold text-slate-200">
+                <span class="lang-ja-only">メインプロンプト</span><span class="lang-en-only">Main Prompt</span>
+                <span class="pc-only text-[10px] text-slate-400 font-normal">
+                  <span class="lang-ja-only">（※タグ表記上の強調・重み付けは省略されています。全文コピーは「コピー」をご利用ください）</span>
+                  <span class="lang-en-only">(Weights are stripped in tag chips; use "Copy" for full raw prompt)</span>
+                </span>
+                <span class="mobile-only block sm:inline text-[10px] text-slate-400 font-normal">
+                  <span class="lang-ja-only">（※タグタップで検索 / 全文はコピーを使用）</span>
+                  <span class="lang-en-only">(Tap tag to search / Use Copy for raw text)</span>
+                </span>
+              </span>
+              <div class="flex items-center gap-2">
+                <button id="btnExactSearchPrompt" class="text-indigo-400 hover:underline flex items-center gap-1 font-semibold" title="このメインプロンプトと完全一致する画像を検索">
+                  <i data-lucide="filter" class="w-3 h-3"></i>
+                  <span class="lang-ja-only">完全一致検索</span><span class="lang-en-only">Exact Match</span>
+                </button>
+                <span class="text-slate-600">|</span>
+                <button id="btnCopyPrompt" class="text-indigo-400 hover:underline">
+                  <span class="lang-ja-only">コピー</span><span class="lang-en-only">Copy</span>
+                </button>
+              </div>
+            </div>
+            <div id="modalPrompt" class="text-slate-300 max-h-36 overflow-y-auto font-mono text-[11px] leading-relaxed flex flex-wrap gap-1 p-1.5 bg-slate-900/60 rounded border border-slate-800/80"></div>
+          </div>
+          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+            <div class="flex justify-between items-center mb-1">
+              <span class="font-bold text-rose-300"><span class="lang-ja-only">除外プロンプト (UC)</span><span class="lang-en-only">Undesired Content (UC)</span></span>
+              <button id="btnCopyUC" class="text-rose-400 hover:underline"><span class="lang-ja-only">コピー</span><span class="lang-en-only">Copy</span></button>
+            </div>
+            <p id="modalUC" class="text-slate-400 whitespace-pre-wrap max-h-24 overflow-y-auto font-mono text-[11px] leading-relaxed select-all"></p>
+          </div>
+          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex-1 flex flex-col">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-bold text-slate-200"><span class="lang-ja-only">キャラクター枠 (個別プロンプト & 除外)</span><span class="lang-en-only">Character Slots (Prompt & UC)</span></span>
+              <span id="modalCharCount" class="text-[11px] text-slate-400"></span>
+            </div>
+            <div id="modalCharList" class="space-y-2 overflow-y-auto max-h-60 pr-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+  <div id="editModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 select-auto">
+    <div class="bg-slate-900 border-t sm:border border-slate-700 rounded-t-2xl sm:rounded-xl max-w-3xl w-full max-h-[92dvh] sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-white"><span class="lang-ja-only">プロンプト・メタデータ編集</span><span class="lang-en-only">Edit Prompt & Metadata</span></h2>
+        <button id="editModalCloseBtn" class="p-1 hover:bg-slate-700 rounded text-slate-400"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-1 space-y-4 text-xs">
+        <input type="hidden" id="editItemId">
+        <div>
+          <label class="block font-medium text-slate-300 mb-1"><span class="lang-ja-only">Seed値</span><span class="lang-en-only">Seed</span></label>
+          <input type="text" id="editSeed" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 font-mono focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-300 mb-1"><span class="lang-ja-only">メインプロンプト</span><span class="lang-en-only">Main Prompt</span></label>
+          <textarea id="editPrompt" rows="4" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 font-mono focus:border-indigo-500"></textarea>
+        </div>
+        <div>
+          <label class="block font-medium text-rose-300 mb-1"><span class="lang-ja-only">メイン除外プロンプト (UC)</span><span class="lang-en-only">Main Undesired Content (UC)</span></label>
+          <textarea id="editUC" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 font-mono focus:border-rose-500"></textarea>
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <label class="font-medium text-indigo-300"><span class="lang-ja-only">キャラクタープロンプト枠</span><span class="lang-en-only">Character Prompt Slots</span></label>
+            <button type="button" id="btnAddCharSlot" class="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] flex items-center gap-1">
+              <i data-lucide="plus" class="w-3 h-3"></i> <span class="lang-ja-only">キャラ追加</span><span class="lang-en-only">Add Character</span>
+            </button>
+          </div>
+          <div id="editCharList" class="space-y-3 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+      <div class="px-4 py-3 bg-slate-800 border-t border-slate-700 flex justify-end gap-2">
+        <button id="editModalCancelBtn" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs">
+          <span class="lang-ja-only">キャンセル</span><span class="lang-en-only">Cancel</span>
+        </button>
+        <button id="editModalSaveBtn" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded text-xs">
+          <span class="lang-ja-only">保存する</span><span class="lang-en-only">Save</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  
+  <div id="lightboxModal" class="hidden fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-2 cursor-zoom-out select-none">
+    <img id="lightboxImage" class="max-w-full max-h-full object-contain" alt="Fullscreen">
+  </div>
+
+  <script>const _0x52d41e=_0xbf67;(function(_0x4796b4,_0x32d2be){const _0x12ee10=_0xbf67,_0x5d4720=_0x4796b4();while(!![]){try{const _0x380e60=-parseInt(_0x12ee10(0x243))/0x1+parseInt(_0x12ee10(0x258))/0x2+parseInt(_0x12ee10(0x1e4))/0x3*(parseInt(_0x12ee10(0x249))/0x4)+parseInt(_0x12ee10(0xf2))/0x5*(-parseInt(_0x12ee10(0x1ca))/0x6)+parseInt(_0x12ee10(0x181))/0x7+-parseInt(_0x12ee10(0x333))/0x8*(-parseInt(_0x12ee10(0x327))/0x9)+-parseInt(_0x12ee10(0x110))/0xa*(parseInt(_0x12ee10(0x103))/0xb);if(_0x380e60===_0x32d2be)break;else _0x5d4720['push'](_0x5d4720['shift']());}catch(_0x5d0bcb){_0x5d4720['push'](_0x5d4720['shift']());}}}(_0x1f39,0x4dfd3));const db=new Dexie(_0x52d41e(0x2eb));db[_0x52d41e(0x167)](0x1)[_0x52d41e(0x28b)]({'metadata':'++id,\x20imageHash,\x20seed,\x20fileName,\x20createdAt','images':'id'});const PAGE_SIZE=0xc8;let currentPage=0x1,filteredIds=[],lightMetaList=[],activeModalIndex=-0x1,currentObjectUrls=[],selectedTags=new Set(),selectedCharTags=new Set(),currentSort=_0x52d41e(0x188),activeExactPromptMatch=null,currentView=_0x52d41e(0x329),currentLang='ja';function t(_0x1bdaae,_0x250f1d){return currentLang==='en'?_0x250f1d:_0x1bdaae;}let uiModePreference=_0x52d41e(0x29c),isMobileUI=window['innerWidth']<0x300;function syncDateEmptyState(){const _0x343e38=_0x52d41e;[_0x343e38(0x2ed),_0x343e38(0x27f)][_0x343e38(0x298)](_0x30a018=>{const _0x104abf=_0x343e38,_0x1afd41=document[_0x104abf(0x120)](_0x30a018);if(_0x1afd41)_0x1afd41[_0x104abf(0xdf)][_0x104abf(0x209)](_0x104abf(0x31e),!_0x1afd41['value']);});}function syncStaticAttributes(){const _0x3a2014=_0x52d41e;document[_0x3a2014(0x259)][_0x3a2014(0x219)]=currentLang,document[_0x3a2014(0x227)][_0x3a2014(0xdf)]['toggle'](_0x3a2014(0x20c),currentLang==='en'),document[_0x3a2014(0x227)][_0x3a2014(0xdf)][_0x3a2014(0x209)](_0x3a2014(0x32b),currentLang==='ja'),document[_0x3a2014(0x120)](_0x3a2014(0x2aa))[_0x3a2014(0x1b5)]=currentLang==='en'?'EN':'JP';const _0x2fa14d=document[_0x3a2014(0x120)](_0x3a2014(0x26c));_0x2fa14d&&(_0x2fa14d['innerText']=isMobileUI?t(_0x3a2014(0x300),_0x3a2014(0x1bf)):t(_0x3a2014(0x22c),'PC')),document[_0x3a2014(0x120)](_0x3a2014(0x169))[_0x3a2014(0x18c)]=isMobileUI?t('タグ検索\x20(例:\x202026/11/05,\x201girl)\x20/\x20\x22全文\x22...',_0x3a2014(0x2fa)):t(_0x3a2014(0x105),_0x3a2014(0x15a)),document[_0x3a2014(0x120)]('tagFilterInput')[_0x3a2014(0x18c)]=t('タグ名で絞り込む...',_0x3a2014(0x228)),document['getElementById'](_0x3a2014(0x246))['placeholder']=t(_0x3a2014(0x11d),_0x3a2014(0x17f)),document[_0x3a2014(0x120)](_0x3a2014(0x1ad))['textContent']=t(_0x3a2014(0x2d2),_0x3a2014(0x1f5)),document[_0x3a2014(0x120)]('optSortDateAsc')[_0x3a2014(0x194)]=t(_0x3a2014(0x2e5),_0x3a2014(0x24a)),document[_0x3a2014(0x120)]('optSortNameAsc')['textContent']=t('ファイル名\x20(昇順)',_0x3a2014(0x1ec)),document[_0x3a2014(0x120)](_0x3a2014(0x235))['textContent']=t(_0x3a2014(0x2db),_0x3a2014(0x2ff)),document[_0x3a2014(0x120)](_0x3a2014(0x313))[_0x3a2014(0x306)]=t(_0x3a2014(0x2a2),_0x3a2014(0x1b7)),document[_0x3a2014(0x120)]('btnOpenSupport')[_0x3a2014(0x306)]=t(_0x3a2014(0x1ba),_0x3a2014(0x277)),document[_0x3a2014(0x120)]('btnToggleUiMode')[_0x3a2014(0x306)]=t('PC版\x20/\x20モバイル版\x20レイアウト切替',_0x3a2014(0x256)),document[_0x3a2014(0x120)]('nsfwToggleLabel')[_0x3a2014(0x306)]=t(_0x3a2014(0x147),_0x3a2014(0x20a)),document[_0x3a2014(0x120)]('hdrDateBox')[_0x3a2014(0x306)]=t(_0x3a2014(0x2c9),_0x3a2014(0x318)),document[_0x3a2014(0x120)](_0x3a2014(0x2ed))[_0x3a2014(0x306)]=t(_0x3a2014(0x27e),_0x3a2014(0x186)),document[_0x3a2014(0x120)](_0x3a2014(0x27f))[_0x3a2014(0x306)]=t(_0x3a2014(0x135),'End\x20Date\x20(Empty\x20for\x20ANY)'),document[_0x3a2014(0x120)](_0x3a2014(0x301))[_0x3a2014(0x306)]=t(_0x3a2014(0x12c),_0x3a2014(0x330)),document[_0x3a2014(0x120)]('btnExportZip')[_0x3a2014(0x306)]=t(_0x3a2014(0x1d4),_0x3a2014(0x153)),document['getElementById'](_0x3a2014(0x244))[_0x3a2014(0x306)]=t(_0x3a2014(0x1be),_0x3a2014(0x12f)),document[_0x3a2014(0x120)](_0x3a2014(0x2a0))[_0x3a2014(0x306)]=t(_0x3a2014(0x1f6),_0x3a2014(0x190)),document['getElementById'](_0x3a2014(0x269))[_0x3a2014(0x306)]=t(_0x3a2014(0x312),_0x3a2014(0x1a6)),document['getElementById'](_0x3a2014(0x2fc))[_0x3a2014(0x306)]=t(_0x3a2014(0x1f7),_0x3a2014(0x165)),document[_0x3a2014(0x120)](_0x3a2014(0x2ca))[_0x3a2014(0x306)]=t('移動したいページ番号を入力',_0x3a2014(0x165)),document[_0x3a2014(0x120)](_0x3a2014(0x262))['title']=t(_0x3a2014(0x2f4),_0x3a2014(0x226));}function applyUILayoutClasses(){const _0x222c67=_0x52d41e;uiModePreference===_0x222c67(0x29c)?isMobileUI=window[_0x222c67(0x19e)]<0x300:isMobileUI=uiModePreference===_0x222c67(0x22a);document['body'][_0x222c67(0xdf)][_0x222c67(0x209)]('mode-mobile',isMobileUI),document[_0x222c67(0x227)]['classList']['toggle'](_0x222c67(0xde),!isMobileUI);const _0x41cab9=document[_0x222c67(0x120)](_0x222c67(0x1c1));if(_0x41cab9)_0x41cab9[_0x222c67(0x29b)](_0x222c67(0x121),isMobileUI?_0x222c67(0x129):_0x222c67(0x152));syncStaticAttributes();const _0x5a7fdd=document['getElementById'](_0x222c67(0x1af)),_0x37f128=document['getElementById'](_0x222c67(0x14e)),_0x5663ac=document[_0x222c67(0x120)](_0x222c67(0x19c)),_0x2d7963=document[_0x222c67(0x120)](_0x222c67(0x1e5));_0x5a7fdd&&_0x37f128&&_0x5663ac&&_0x2d7963&&(isMobileUI?(_0x5a7fdd['className']=(currentView===_0x222c67(0x23f)?'':'hidden\x20')+'md:overflow-x-auto\x20md:border\x20md:border-slate-700\x20rounded-lg\x20md:shadow-lg',_0x37f128[_0x222c67(0x210)]='w-full\x20text-left\x20text-xs\x20text-slate-300\x20border-collapse\x20block\x20md:table',_0x5663ac[_0x222c67(0x210)]=_0x222c67(0x10b),_0x2d7963[_0x222c67(0x210)]=_0x222c67(0x232)):(_0x5a7fdd[_0x222c67(0x210)]=(currentView===_0x222c67(0x23f)?'':_0x222c67(0xec))+'overflow-x-auto\x20border\x20border-slate-700\x20rounded-lg\x20shadow-lg',_0x37f128[_0x222c67(0x210)]='w-full\x20text-left\x20text-xs\x20text-slate-300\x20border-collapse',_0x5663ac[_0x222c67(0x210)]=_0x222c67(0x224),_0x2d7963[_0x222c67(0x210)]=_0x222c67(0x284)));}function updateUIMode(_0x546512=![]){const _0x503ee6=isMobileUI;applyUILayoutClasses(),(_0x546512||_0x503ee6!==isMobileUI)&&(updateSelectedTagsPanel(),updateSelectedCharTagsPanel(),switchView(currentView,![]),renderCurrentPage());}document[_0x52d41e(0x120)]('btnToggleUiMode')['onclick']=()=>{const _0x4b0a85=_0x52d41e;uiModePreference=isMobileUI?'pc':_0x4b0a85(0x22a),window['trackEvent'](_0x4b0a85(0x100),{'mode':uiModePreference}),updateUIMode(!![]);},document[_0x52d41e(0x120)](_0x52d41e(0x2f2))[_0x52d41e(0x2a3)]=()=>{const _0x29e6be=_0x52d41e;currentLang=currentLang==='ja'?'en':'ja',window[_0x29e6be(0x2ae)](_0x29e6be(0x2a4),{'lang':currentLang}),syncStaticAttributes(),renderTagsCloud(document[_0x29e6be(0x120)](_0x29e6be(0x1b8))[_0x29e6be(0x162)]['trim']()),updateSelectedTagsPanel(),renderCharTagsCloud(document[_0x29e6be(0x120)](_0x29e6be(0x246))[_0x29e6be(0x162)][_0x29e6be(0x16f)]()),updateSelectedCharTagsPanel(),renderCurrentPage(),!document['getElementById'](_0x29e6be(0x20d))['classList'][_0x29e6be(0x208)]('hidden')&&activeModalIndex>=0x0&&filteredIds[activeModalIndex]&&window[_0x29e6be(0x10d)](filteredIds[activeModalIndex]);},window[_0x52d41e(0x179)]('resize',()=>{const _0x54df3f=_0x52d41e;if(uiModePreference===_0x54df3f(0x29c))updateUIMode(![]);});function scrollToTop(){const _0x53a039=_0x52d41e;window['scrollTo']({'top':0x0,'behavior':_0x53a039(0xdc)});const _0x106dff=document['getElementById'](_0x53a039(0x28a));if(_0x106dff)_0x106dff[_0x53a039(0x2cf)]({'top':0x0,'behavior':_0x53a039(0xdc)});}function cleanTag(_0x94cc73){const _0x9b42e6=_0x52d41e;if(!_0x94cc73)return'';let _0x2aaf3d=_0x94cc73['trim']()['toLowerCase']();return _0x2aaf3d=_0x2aaf3d[_0x9b42e6(0x28c)](/^[0-9.]*::/g,'')[_0x9b42e6(0x28c)](/::[0-9.]*$/g,'')[_0x9b42e6(0x28c)](/::$/g,''),_0x2aaf3d=_0x2aaf3d[_0x9b42e6(0x28c)](/^[\{\[]+/g,'')[_0x9b42e6(0x28c)](/[\}\]]+$/g,''),_0x2aaf3d[_0x9b42e6(0x16f)]();}function normalizeFullPrompt(_0x4e32df){const _0x13c6d1=_0x52d41e;if(!_0x4e32df)return'';return _0x4e32df['replace'](/[\u00A0\u3000]/g,'\x20')[_0x13c6d1(0x28c)](/[\r\n]+/g,'\x20')[_0x13c6d1(0x28c)](/\s+/g,'\x20')[_0x13c6d1(0x16f)]()[_0x13c6d1(0x1e8)]();}function _0x1f39(){const _0x1870cc=['byteLength','btnClearSelectedCharTags','deleteItem','bulkGet','contains','toggle','ON:\x20Show\x20All\x20/\x20OFF:\x20Hide\x20images\x20with\x20NSFW\x20tag','message','lang-en','detailModal','Changes\x20saved\x20successfully.','border-slate-600\x20bg-slate-900\x20text-transparent','className','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</tr>\x0a\x20\x20\x20\x20\x20\x20\x20\x20','buffer','...','editCharList','ZIP書き出し中:\x20','sort','digest','end','lang',',\x20スキップ:\x20','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20',')\x22\x20class=\x22w-full\x20px-2\x20py-1\x20bg-indigo-900/40\x20hover:bg-indigo-800/60\x20text-indigo-200\x20rounded\x20text-[11px]\x20border\x20border-indigo-700/50\x22>','更新を保存しました。','Copy\x20UC','枠設定あり','fileName_asc','px-2\x20py-1\x20my-0.5\x20rounded-md','copyText','from','bg-slate-800\x20text-slate-200\x20uppercase\x20tracking-wider\x20border-b\x20border-slate-700\x20font-semibold\x20sticky\x20top-0\x20z-10','thumbFileName','Scroll\x20to\x20top','body','Filter\x20tags...','選択した\x20','mobile','AbortError','PC版','No\x20data\x20registered.','thumbBlob','modalSeed','caption','readwrite','block\x20md:table-row-group\x20space-y-3\x20md:space-y-0\x20md:divide-y\x20md:divide-slate-800\x20md:bg-slate-900/60','getBatchBlobs','</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','optSortNameDesc','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22openEditModal(','<button\x20onclick=\x22copyText(\x27','undesired_content','supportModal','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','UndesiredContent','lightboxModal','findIndex','nsfw','matrix','枠を削除','\x22\x20class=\x22max-w-[120px]\x20max-h-[150px]\x20w-auto\x20h-auto\x20object-contain\x20rounded\x20cursor-pointer\x20transition\x20hover:opacity-90\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20onclick=\x22openFullLightbox(','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22border\x20border-slate-800\x20bg-slate-900\x20p-2\x20rounded\x20text-[11px]\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20justify-between\x20items-center\x20text-slate-300\x20font-semibold\x20mb-1\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span>','630343yOBUpT','btnExportLightZip','editUC','charTagFilterInput','modalCloseBtn','Character\x20Prompt','588716ZoRhhd','Date\x20Created\x20(Oldest)','<span\x20class=\x22text-slate-500\x20text-[11px]\x22>','Bulk\x20loading\x20(Part\x20','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22p-3\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22font-mono\x20text-[11px]\x20text-slate-300\x20max-h-36\x20overflow-y-auto\x20leading-relaxed\x20select-all\x22>','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22font-mono\x20text-indigo-400\x20ml-1\x20shrink-0\x22>','Comment','作成日タグ「','maxPageNum','ファイル\x20','No\x20data\x20to\x20export.','lightboxImage','files','Switch\x20PC\x20/\x20Mobile\x20Layout','string','1107006PyRjqG','documentElement','SHA-256','includes','この登録データを削除しますか？','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22absolute\x20inset-0\x20bg-black/60\x20opacity-0\x20group-hover:opacity-100\x20transition\x20flex\x20items-center\x20justify-center\x20gap-1.5\x20p-1\x20rounded-lg\x20pointer-events-none\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22event.stopPropagation();\x20openFullLightbox(','\x27)\x22\x20class=\x22mt-1\x20text-[10px]\x20text-rose-400\x20hover:underline\x20flex\x20items-center\x20gap-1\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i>\x20','</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22copyText(\x27','\x20件）。','hidden','btnScrollTop','btnViewCharTags','restored_','zipRestoreInput','modalNextBtn','Writing\x20ZIP:\x20',')\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22w-full\x20min-h-[140px]\x20max-h-[220px]\x20flex\x20items-center\x20justify-center\x20overflow-hidden\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<img\x20src=\x22','btnClearAllDB','min','<div\x20class=\x22text-[10px]\x20text-rose-400\x20font-mono\x20select-all\x22>','uiModeLabel','metadata','All\x20data\x20has\x20been\x20cleared.','\x20items)...','info','isArray','#editCharList\x20.char-slot','primaryKeys','keys','Edit','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','Support\x20&\x20Feature\x20Requests','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22copyText(\x27','cleanTags','change','\x27)\x22\x20class=\x22text-[11px]\x20text-rose-400\x20flex\x20items-center\x20gap-1\x22><i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i>\x20','parse','split','開始日\x20(未指定でANY)','dateToInput','helpModalCloseBtn','</button>','\x20(Added:\x20','<div\x20class=\x22text-rose-400/90\x20font-mono\x20text-[10px]\x20mt-1\x20line-clamp-2\x20select-all\x22\x20title=\x22','divide-y\x20divide-slate-800\x20bg-slate-900/60','padStart','push','btnApplyTagFilter','Promptコピー','復元完了:\x20','mainContent','stores','replace','btnJumpPageBottom','\x27)\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20class=\x22px-2\x20py-0.5\x20bg-slate-950\x20hover:bg-indigo-600\x20active:bg-indigo-500\x20text-[11px]\x20font-mono\x20text-slate-300\x20hover:text-white\x20rounded\x20border\x20border-slate-700\x20transition\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20title=\x22','subtle','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20gap-1\x20text-indigo-400\x20select-all\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span>','bottomFilterCount','count','Building\x20light\x20backup\x20(thumbnails\x20&\x20metadata)...','v4_prompt','fileName','innerHTML','(No\x20prompt)','forEach','toCollection','\x27)\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20class=\x22px-1.5\x20py-0.5\x20bg-slate-950\x20hover:bg-indigo-600\x20text-slate-300\x20hover:text-white\x20rounded\x20border\x20border-slate-700\x20text-[10px]\x20transition\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20title=\x22','setAttribute','auto','Search\x20tag\x20\x22','<span\x20class=\x22text-slate-500\x20text-sm\x20py-4\x22>','orderBy','lblRestoreZip','indexOf','使い方と仕様ガイド','onclick','toggle_language','Copy','char_caption','thumbnails/','images','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20gap-1.5\x20text-[10px]\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22copyText(\x27','langLabel','0\x20slots','Search\x20by\x20date\x20\x22','lastIndexOf','trackEvent','画像一括インポート中\x20(サムネイル生成)...','\x27)\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20class=\x22px-1.5\x20py-0.5\x20bg-slate-950\x20hover:bg-indigo-600\x20text-slate-300\x20hover:text-white\x20rounded\x20border\x20border-slate-700\x20hover:border-indigo-400\x20text-[10px]\x20transition\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20title=\x22','\x22\x20class=\x22max-w-full\x20max-h-[220px]\x20w-auto\x20h-auto\x20object-contain\x20rounded\x22\x20loading=\x22lazy\x22\x20alt=\x22','editModal','\x20(追加:\x20','Negative\x20(UC)','protocol','update','して選択してください。','\x20selected\x20tag(s)\x20(AND)','個別キャラ設定なし','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22toggleCharTagSelection(\x27','substring','helpToSupportBtn','除外コピー','本文コピー','canvas','removeChild','</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','(除外なし)','createdAt','Copy\x20Prompt','getTime','btnExactSearchPrompt','checked','クリック','作成日の期間で絞り込み（未指定なら全期間ANY）','pageJumpInputBottom','キャラ','\x27)\x22\x20class=\x22mt-1\x20text-[10px]\x20text-indigo-400\x20hover:underline\x20flex\x20items-center\x20gap-1\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i>\x20','px-2.5\x20py-1\x20text-xs\x20rounded\x20font-medium\x20bg-indigo-600\x20text-white\x20flex\x20items-center\x20justify-center\x20gap-1.5\x20transition','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22p-3\x20max-w-sm\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22max-h-52\x20overflow-y-auto\x20pr-1\x22>','scrollTo','getMonth','searchFromDetailTag','作成日時\x20(新しい順)','キャラクター名','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','name','full','tagCloudContainer','\x20/\x203,000枚・3.5GB基準)...','char_prompts','getSeconds','ファイル名\x20(降順)','application/json','v4_negative_prompt','\x0a\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22inline-flex\x20items-center\x20gap-1.5\x20px-3\x20py-1\x20bg-indigo-950\x20border\x20border-indigo-700/60\x20rounded-full\x20text-indigo-200\x20text-xs\x20font-mono\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span>','editSeed','\x20(Added:','\x27)\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20class=\x22px-1.5\x20py-0.5\x20bg-slate-900\x20hover:bg-indigo-600\x20active:bg-indigo-500\x20text-[9px]\x20text-slate-400\x20hover:text-white\x20rounded\x20border\x20border-slate-800\x20font-mono\x20truncate\x20transition\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20title=\x22','length','setUint32','emptyState','作成日時\x20(古い順)','</span>','.char-prompt','Char','match','supportModalOkBtn','NovelAI_Matrix_V3_DB','delete','dateFromInput','writeText','\x27)\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20class=\x22z-10\x20px-1\x20py-0.5\x20bg-slate-900\x20hover:bg-indigo-600\x20text-slate-400\x20hover:text-white\x20rounded\x20border\x20border-slate-800\x20hover:border-indigo-400\x20transition\x20truncate\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20title=\x22','クリップボードにコピーしました','btnViewGallery','btnToggleLang','charTags','ページの最上部へ戻る','import_images','\x22\x20class=\x22max-w-full\x20max-h-full\x20w-auto\x20h-auto\x20object-contain\x22\x20loading=\x22lazy\x22\x20alt=\x22','open_support_modal','このタグ「','setUint16','Search\x20tags\x20(e.g.,\x202026/11/05,\x201girl)\x20/\x20\x22exact\x22...','target','pageJumpInput','File\x20','_part','File\x20Name\x20(Z-A)','モバイル版','btnClearDateRange','map','キャラクタープロンプト','round','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22font-mono\x20text-indigo-400\x20ml-1\x20shrink-0\x22>','title','btnApplyCharTagFilter','clear','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22mb-2\x20p-2\x20bg-slate-950\x20rounded\x20border\x20border-slate-800\x20text-[11px]\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20justify-between\x20text-indigo-300\x20font-bold\x20mb-1\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span>','<span\x20class=\x22text-slate-500\x22>','px-1.5\x20py-0.5\x20my-0.5\x20rounded','object','</textarea>\x0a\x20\x20\x20\x20\x20\x20','supportModalCloseBtn','btnCopySeed','localeCompare','size','全データ初期化','btnOpenHelp','Details','open_help_modal','btnExportZip','get','Filter\x20by\x20creation\x20date\x20range\x20(Empty\x20for\x20ANY)','py-1.5\x20text-[11px]\x20sm:text-xs\x20rounded-md\x20font-medium\x20text-slate-400\x20hover:text-white\x20flex\x20items-center\x20justify-center\x20gap-1\x20transition','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22hidden\x20md:table-cell\x20md:p-3\x20font-mono\x20text-[11px]\x20space-y-1.5\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22searchByDateTag(\x27','prompt','No\x20individual\x20character\x20prompts.','disabled','is-empty','Main\x20Prompt',')\x20|\x20Restored:\x20','.char-name','Slot\x20','character_prompts','totalItemsCount','.char-uc','\x20duplicate(s)\x20skipped).','63CekPJZ','\x20個のZIPファイルからデータを復元しますか？\x0a（※既存のデータにマージされます）','gallery','btnApplyCharTagFilterText','lang-ja','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex-1\x20text-left\x20md:hidden\x20space-y-1.5\x20min-w-0\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22text-xs\x20font-bold\x20text-slate-200\x20truncate\x22>','</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22max-h-52\x20overflow-y-auto\x20pr-1\x22>','\x27)\x22\x20class=\x22text-slate-500\x20hover:text-slate-300\x22><i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i></button>','\x27)\x22\x20class=\x22p-1\x20bg-slate-800\x20rounded\x20text-slate-300\x22><i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i></button>','Clear\x20date\x20range\x20(Reset\x20to\x20ANY)','entries','error','152936kmDflu','base_caption','Search\x20with\x20','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<tr\x20class=\x22hover:bg-slate-800/40\x20align-top\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22p-3\x20text-center\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20justify-center\x20min-h-[90px]\x20max-h-[160px]\x20w-full\x20bg-slate-950/60\x20rounded\x20p-1\x20border\x20border-slate-800\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<img\x20src=\x22','sortSelect','smooth','nsfwToggle','mode-pc','classList','\x27)\x22\x20class=\x22text-indigo-400\x20hover:underline\x22>','Restore\x20failed:\x20','getContext','height','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22trash-2\x22\x20class=\x22w-3.5\x20h-3.5\x22></i>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20','\x20内に\x20metadata.json\x20が見つかりません。','\x22\x20rows=\x221\x22\x20class=\x22char-uc\x20w-full\x20bg-slate-900\x20border\x20border-slate-700\x20rounded\x20p-1.5\x20font-mono\x20text-[11px]\x20text-rose-300\x22>','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','Character\x20Negative\x20Prompt\x20(UC)','</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22block\x20md:table-cell\x20mt-3\x20md:mt-0\x20pt-2.5\x20md:pt-3\x20border-t\x20border-slate-800/80\x20md:border-0\x20md:p-3\x20text-center\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22grid\x20grid-cols-3\x20md:flex\x20md:flex-col\x20gap-1.5\x20md:gap-1\x20items-center\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22openDetailModalById(','個別キャラクタープロンプトはありません。','showDirectoryPicker','hidden\x20','bg-indigo-800\x20text-indigo-100','searchByDateTag','style','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22mt-1.5\x20pt-1.5\x20border-t\x20border-slate-800/80\x20flex\x20items-center\x20justify-end\x20gap-1\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22event.stopPropagation();\x20openFullLightbox(','restored_image','35MaCkCV','createIcons','galleryView','iTXt','getUint16','drawImage','btnAddCharSlot','progressStats','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20','」で完全一致検索','encode','openEditModal','bg-slate-950\x20text-indigo-300','has','toggle_ui_mode','comment','\x27)\x22\x20class=\x22hidden\x20md:flex\x20mt-1\x20text-[10px]\x20text-indigo-400\x20hover:underline\x20items-center\x20gap-1\x22><i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i>\x20','1112793TGtqcr','\x22\x20value=\x22','タグ検索\x20(例:\x202026/11/05,\x201girl)、または\x20\x22全文\x22...','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</tr>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','メインプロンプト','bottomPaginationBar','該当する関連タグがありません。','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22maximize-2\x22\x20class=\x22w-3.5\x20h-3.5\x22></i>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22event.stopPropagation();\x20openEditModal(','hidden\x20md:table-header-group\x20bg-slate-800\x20text-slate-200\x20uppercase\x20tracking-wider\x20border-b\x20border-slate-700\x20font-semibold\x20sticky\x20top-0\x20z-10','キャラ\x20','openDetailModalById','btnApplyTagFilterText','ymdSlash','30xmVQik','utf-8','keydown','arrayBuffer','remove','modalCharList','preventDefault','helpModal','seed','div','imageHash','slice','ymd','キャラタグ名で絞り込む...','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22w-4\x20h-4\x20rounded\x20flex\x20items-center\x20justify-center\x20border\x20text-[10px]\x20shrink-0\x20','Click','getElementById','data-lucide','images/','\x27)\x22\x20class=\x22hidden\x20md:flex\x20mt-1\x20text-[10px]\x20text-rose-400\x20hover:underline\x20items-center\x20gap-1\x22><i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i>\x20',',\x20Skipped:','Copied\x20to\x20clipboard','char_captions','filterCount','tEXt','smartphone','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22edit-3\x22\x20class=\x22w-3.5\x20h-3.5\x22></i>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22event.stopPropagation();\x20deleteItem(','No\x20matching\x20related\x20tags\x20found.','期間指定をクリア\x20(ANYに戻す)','すべてのデータを消去しました。','\x22\x20class=\x22max-w-full\x20max-h-full\x20md:max-w-[120px]\x20md:max-h-[150px]\x20w-auto\x20h-auto\x20object-contain\x20rounded\x20cursor-pointer\x20transition\x20hover:opacity-90\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20onclick=\x22openFullLightbox(','Fast\x20ZIP\x20export\x20with\x20thumbnails\x20and\x20metadata\x20only','ymSlash','tags','Prompt','editPrompt','novelai_backup_light_','終了日\x20(未指定でANY)','<span\x20class=\x22text-slate-400\x20select-all\x22>','px-2.5\x20py-1\x20text-xs\x20rounded\x20font-medium\x20text-slate-400\x20hover:text-white\x20flex\x20items-center\x20justify-center\x20gap-1.5\x20transition','isNsfw','close','image/webp','file','&quot;','add','\x20items','escapeQuotes','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22font-mono\x20text-[11px]\x20text-slate-300\x20max-h-28\x20md:max-h-36\x20overflow-y-auto\x20leading-relaxed\x20select-all\x20bg-slate-950/50\x20md:bg-transparent\x20p-2\x20md:p-0\x20rounded\x22>','\x20件のデータを消去しますか？','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22w-full\x20mt-0.5\x20flex\x20items-center\x20justify-between\x20text-[9px]\x20text-slate-500\x20px-0.5\x20font-mono\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22event.stopPropagation();\x20searchByDateTag(\x27','createObjectURL','revokeObjectURL','max','querySelector','ON:\x20全件表示\x20/\x20OFF:\x20NSFWタグを含む画像を一覧から除外','progressContainer','キャラクター別設定','\x27)\x22\x20class=\x22hover:text-white\x22><i\x20data-lucide=\x22x\x22\x20class=\x22w-3.5\x20h-3.5\x22></i></button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20</span>\x0a\x20\x20\x20\x20\x20\x20','toBlob','btnOpenSupport','getFileHandle','matrixTable','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22toggleTagSelection(\x27','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20<textarea\x20placeholder=\x22','getUint8','monitor','Fast\x20split\x20ZIP\x20export\x20with\x20original\x20images\x20(auto-splits\x20every\x203,000\x20items\x20or\x203.5GB)','\x20slot(s)','createElement','decode','\x22\x20class=\x22char-name\x20bg-slate-900\x20border\x20border-slate-700\x20rounded\x20px-2\x20py-1\x20text-xs\x20text-indigo-300\x20font-semibold\x20w-1/2\x20sm:w-1/3\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22this.closest(\x27.char-slot\x27).remove()\x22\x20class=\x22text-rose-400\x20hover:text-rose-300\x20text-xs\x22>','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22deleteItem(','input','Search\x20tags\x20(e.g.,\x202026/11/05,\x201girl),\x20or\x20\x22exact\x20prompt\x22...','switch_view','):\x20','Restore\x20data\x20from\x20','btnCopyUC','clipboard','editModalCancelBtn','\x27)\x22\x20class=\x22text-rose-400\x20hover:underline\x22>','value','charTagsView','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','Enter\x20page\x20number\x20to\x20jump','DOMContentLoaded','version','editModalSaveBtn','searchInput','getUint32','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22toggleCharTagSelection(\x27',')\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22w-full\x20h-[150px]\x20sm:h-[190px]\x20flex\x20items-center\x20justify-center\x20overflow-hidden\x20bg-slate-900/50\x20rounded-lg\x20cursor-pointer\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<img\x20src=\x22','file:','.webp','trim','\x22\x20rows=\x222\x22\x20class=\x22char-prompt\x20w-full\x20bg-slate-900\x20border\x20border-slate-700\x20rounded\x20p-1.5\x20font-mono\x20text-[11px]\x20text-slate-200\x22>','</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20','fullDateTime','選択中のキャラタグはありません。下のタグを','Restore\x20complete:\x20','メイン除外\x20(UC)','\x20matched','</textarea>\x0a\x20\x20\x20\x20\x20\x20\x20\x20<textarea\x20placeholder=\x22','filter','addEventListener',',\x20Errors:\x20','appendChild','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22block\x20md:table-cell\x20mt-2\x20md:mt-0\x20md:p-3\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20justify-between\x20mb-1\x20md:hidden\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22text-[11px]\x20font-bold\x20text-rose-300\x22>','width','btnClearSearch','Filter\x20char\x20tags...','btnPrevPageBottom','3390793NmJBHY','bg-indigo-600\x20border-indigo-400\x20text-white\x20shadow-md\x20ring-2\x20ring-indigo-400/30','modalCreatedAt','btnSameDateSearch','\x27)\x22\x20class=\x22inline-block\x20','Start\x20Date\x20(Empty\x20for\x20ANY)','normalizedPrompt','createdAt_desc','join','loadAsync','mimeType','placeholder',')\x22\x20class=\x22w-full\x20px-2\x20py-2\x20md:py-1\x20bg-slate-800\x20hover:bg-slate-700\x20text-indigo-300\x20rounded-lg\x20md:rounded\x20text-xs\x20md:text-[11px]\x20border\x20border-slate-700\x20font-medium\x22>','ZIP\x20export\x20failed:\x20','compSize','Batch\x20restore\x20from\x20backup\x20ZIP\x20files\x20(supports\x20multiple\x20files)','start','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22w-full\x20mt-1.5\x20flex\x20items-center\x20justify-between\x20text-[10px]\x20text-slate-400\x20px-0.5\x20truncate\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22truncate\x22\x20title=\x22','light','textContent','modalPrevBtn','createWritable','No\x20matching\x20character\x20tags\x20found.','Remove\x20Slot','\x20個のキャラタグでAND検索','charCleanTags','characters','matrixThead','ceil','innerWidth','\x20件のデータを復元しました（重複スキップ:\x20','toggleCharTagSelection','metadata.json','progressBar','Tap','modalUC','\x20/\x20','Clear\x20All\x20Data','createdAt_asc','\x20processed\x20(Part:\x20','bottomTotalItemsCount','btnClearSelectedTags','path','image/png','optSortDateDesc','stringify','matrixView','btnViewTags','rating:nsfw','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22text-slate-300\x20font-mono\x20line-clamp-2\x20select-all\x22\x20title=\x22','blob','\x20tags\x20below\x20to\x20select.','innerText','<span\x20class=\x22text-slate-500\x20text-xs\x22>','User\x20Guide\x20&\x20Specifications','tagFilterInput','modalImage','開発支援・機能リクエスト','Delete','querySelectorAll','key','サムネイルとメタデータのみを高速ZIP保存','Mobile','modalCharCount','uiModeIcon','(プロンプトなし)','set','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22p-3\x20font-mono\x20text-[11px]\x20space-y-1.5\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22searchByDateTag(\x27','async','</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22copyText(\x27','No\x20character\x20tags\x20selected.\x20','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22p-3\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22font-mono\x20text-[11px]\x20text-rose-300\x20max-h-36\x20overflow-y-auto\x20leading-relaxed\x20select-all\x22>','download','56250RDGqHs','assign','application/zip',')\x22\x20class=\x22pointer-events-auto\x20p-1.5\x20bg-slate-800\x20hover:bg-slate-700\x20text-white\x20rounded\x22\x20title=\x22','タップ','createImageBitmap','復元に失敗しました:\x20','btnViewMatrix','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22w-full\x20mt-1.5\x20px-0.5\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20justify-between\x20text-[10px]\x20text-slate-300\x20truncate\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22truncate\x22\x20title=\x22','.zip','元画像を含めて高速分割ZIP保存（3,000枚または3.5GBごと自動分割）','\x20/\x203,000\x20items\x20or\x203.5GB)...','\x20件\x20表示対象','</div>','Enter','btnJumpPage','selectedCharTagsList','</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22deleteItem(','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22text-slate-300\x20font-mono\x20text-[10px]\x20break-all\x20mb-1\x20flex\x20flex-wrap\x20gap-1\x20p-1\x20bg-slate-950/70\x20rounded\x20border\x20border-slate-800/80\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20',')\x22\x20class=\x22w-full\x20px-2\x20py-1\x20bg-slate-800\x20hover:bg-slate-700\x20text-indigo-300\x20rounded\x20text-[11px]\x20border\x20border-slate-700\x22>','rawFileName','href','location','every','maxPageNumBottom','\x0a\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20justify-between\x20items-center\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<input\x20type=\x22text\x22\x20placeholder=\x22','3lkrITp','matrixTableBody','src','btnPrevPage','toLowerCase','選択された\x20','Full\x20Size','高速バルク読込中\x20(パート','File\x20Name\x20(A-Z)','コピー','btnNextPageBottom','openFullLightbox',',\x20Skipped:\x20','compMethod','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22block\x20md:table-cell\x20mt-2\x20md:mt-0\x20md:p-3\x20md:max-w-sm\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22text-[11px]\x20font-bold\x20text-slate-300\x20mb-1\x20md:hidden\x22>',')\x22\x20class=\x22w-full\x20px-2\x20py-2\x20md:py-1\x20bg-indigo-900/40\x20hover:bg-indigo-800/60\x20text-indigo-200\x20rounded-lg\x20md:rounded\x20text-xs\x20md:text-[11px]\x20border\x20border-indigo-700/50\x20font-medium\x22>','bulkPut','Date\x20Created\x20(Newest)','バックアップZIPファイルから一括完全復元（複数同時選択対応）','移動したいページ番号を入力',')\x22\x20title=\x22','editItemId','border-white\x20bg-indigo-700\x20text-white','\x20件処理済\x20(出力パート数:\x20','localHeaderOffset','No\x20tags\x20selected.\x20','lastModified',')\x22\x20class=\x22p-1.5\x20bg-slate-800\x20hover:bg-slate-700\x20active:bg-slate-600\x20text-slate-200\x20rounded-md\x22\x20title=\x22','\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22edit-3\x22\x20class=\x22w-3.5\x20h-3.5\x22></i>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22event.stopPropagation();\x20deleteItem(','\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22group\x20relative\x20rounded-xl\x20overflow-hidden\x20bg-slate-950\x20border\x20border-slate-800\x20hover:border-indigo-500\x20transition\x20shadow\x20flex\x20flex-col\x20justify-between\x20p-1.5\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20onclick=\x22openDetailModalById(','Character\x20Name','progressStatus'];_0x1f39=function(){return _0x1870cc;};return _0x1f39();}function getDateTokens(_0x57f334){const _0x24ff90=_0x52d41e;if(!_0x57f334)return null;const _0x42a2e7=new Date(_0x57f334);if(isNaN(_0x42a2e7[_0x24ff90(0x2c5)]()))return null;const _0x352abb=_0xba6bfd=>String(_0xba6bfd)[_0x24ff90(0x285)](0x2,'0'),_0x25730f=_0x42a2e7['getFullYear'](),_0x26f713=_0x352abb(_0x42a2e7[_0x24ff90(0x2d0)]()+0x1),_0x1ef94b=_0x352abb(_0x42a2e7['getDate']()),_0x33ced0=_0x352abb(_0x42a2e7['getHours']()),_0x596a13=_0x352abb(_0x42a2e7['getMinutes']()),_0x4848da=_0x352abb(_0x42a2e7[_0x24ff90(0x2da)]());return{'ymdSlash':_0x25730f+'/'+_0x26f713+'/'+_0x1ef94b,'ymSlash':_0x25730f+'/'+_0x26f713,'ymdHyphen':_0x25730f+'-'+_0x26f713+'-'+_0x1ef94b,'ymHyphen':_0x25730f+'-'+_0x26f713,'fullDateTime':_0x25730f+'/'+_0x26f713+'/'+_0x1ef94b+'\x20'+_0x33ced0+':'+_0x596a13+':'+_0x4848da};}function _0xbf67(_0xcd1121,_0x58dc13){_0xcd1121=_0xcd1121-0xd9;const _0x1f3906=_0x1f39();let _0xbf67d0=_0x1f3906[_0xcd1121];return _0xbf67d0;}function formatDateTime(_0x130113){const _0x49a6ef=_0x52d41e,_0x3f9e7b=getDateTokens(_0x130113);return _0x3f9e7b?_0x3f9e7b[_0x49a6ef(0x172)]:'-';}function formatDateOnly(_0x39e53a){const _0x152298=_0x52d41e,_0x295224=getDateTokens(_0x39e53a);return _0x295224?_0x295224[_0x152298(0x10f)]:'-';}window[_0x52d41e(0xee)]=function(_0x54d317){const _0x211a4d=_0x52d41e;if(!_0x54d317||_0x54d317==='-')return;document['getElementById'](_0x211a4d(0x20d))['classList'][_0x211a4d(0x13d)]('hidden'),activeModalObjUrl&&(URL[_0x211a4d(0x144)](activeModalObjUrl),activeModalObjUrl=null),activeExactPromptMatch=null,document[_0x211a4d(0x120)]('searchInput')[_0x211a4d(0x162)]=_0x54d317,selectedTags[_0x211a4d(0x308)](),updateSelectedTagsPanel(),selectedCharTags['clear'](),updateSelectedCharTagsPanel(),switchView('gallery'),applyFilterAndRender();};async function createThumbnailBlob(_0x1ae037,_0x2b49da=0xdc){const _0xa0cf73=_0x52d41e;if(window[_0xa0cf73(0x1cf)])try{const _0x466f35=await createImageBitmap(_0x1ae037);let _0x368a73=_0x466f35[_0xa0cf73(0x17d)],_0x17c4a5=_0x466f35[_0xa0cf73(0xe3)];_0x368a73>_0x17c4a5?_0x368a73>_0x2b49da&&(_0x17c4a5=Math[_0xa0cf73(0x304)](_0x17c4a5*_0x2b49da/_0x368a73),_0x368a73=_0x2b49da):_0x17c4a5>_0x2b49da&&(_0x368a73=Math[_0xa0cf73(0x304)](_0x368a73*_0x2b49da/_0x17c4a5),_0x17c4a5=_0x2b49da);const _0xfebe55=document['createElement'](_0xa0cf73(0x2bf));return _0xfebe55[_0xa0cf73(0x17d)]=_0x368a73,_0xfebe55[_0xa0cf73(0xe3)]=_0x17c4a5,_0xfebe55['getContext']('2d')[_0xa0cf73(0xf7)](_0x466f35,0x0,0x0,_0x368a73,_0x17c4a5),_0x466f35[_0xa0cf73(0x139)](),await new Promise(_0xb7c40e=>_0xfebe55[_0xa0cf73(0x14b)](_0xb7c40e,_0xa0cf73(0x13a),0.65));}catch(_0xcee75e){}return new Promise(_0x46b038=>{const _0x1006b1=_0xa0cf73,_0x2b905d=new Image(),_0x2dd20b=URL[_0x1006b1(0x143)](_0x1ae037);_0x2b905d['onload']=()=>{const _0x3652ad=_0x1006b1;let _0x35459a=_0x2b905d['width'],_0x309b85=_0x2b905d['height'];_0x35459a>_0x309b85?_0x35459a>_0x2b49da&&(_0x309b85=Math[_0x3652ad(0x304)](_0x309b85*_0x2b49da/_0x35459a),_0x35459a=_0x2b49da):_0x309b85>_0x2b49da&&(_0x35459a=Math[_0x3652ad(0x304)](_0x35459a*_0x2b49da/_0x309b85),_0x309b85=_0x2b49da);const _0x4fc031=document[_0x3652ad(0x155)](_0x3652ad(0x2bf));_0x4fc031['width']=_0x35459a,_0x4fc031[_0x3652ad(0xe3)]=_0x309b85,_0x4fc031[_0x3652ad(0xe2)]('2d')['drawImage'](_0x2b905d,0x0,0x0,_0x35459a,_0x309b85),URL[_0x3652ad(0x144)](_0x2dd20b),_0x4fc031['toBlob'](_0x38241e=>_0x46b038(_0x38241e),'image/webp',0.65);},_0x2b905d['onerror']=()=>{const _0x2f5d5d=_0x1006b1;URL[_0x2f5d5d(0x144)](_0x2dd20b),_0x46b038(null);},_0x2b905d['src']=_0x2dd20b;});}async function calculateSHA256(_0x51ac87){const _0x567db8=_0x52d41e,_0x429d1d=await crypto[_0x567db8(0x28f)][_0x567db8(0x217)](_0x567db8(0x25a),_0x51ac87);return Array['from'](new Uint8Array(_0x429d1d))[_0x567db8(0x302)](_0x1b8b2a=>_0x1b8b2a['toString'](0x10)[_0x567db8(0x285)](0x2,'0'))[_0x567db8(0x189)]('');}function extractNovelAIMetadata(_0x16ce10){const _0x3568ae=_0x52d41e,_0x32feee=new DataView(_0x16ce10);if(_0x32feee[_0x3568ae(0x204)]<0x8||_0x32feee[_0x3568ae(0x16a)](0x0)!==0x89504e47)return null;let _0x7fb4b9=0x8;const _0x12b56b=new TextDecoder(_0x3568ae(0x111));let _0x5b7828={};while(_0x7fb4b9<_0x32feee[_0x3568ae(0x204)]){if(_0x7fb4b9+0x8>_0x32feee[_0x3568ae(0x204)])break;const _0x1d5206=_0x32feee[_0x3568ae(0x16a)](_0x7fb4b9),_0x73e0ff=String['fromCharCode'](_0x32feee['getUint8'](_0x7fb4b9+0x4),_0x32feee[_0x3568ae(0x151)](_0x7fb4b9+0x5),_0x32feee[_0x3568ae(0x151)](_0x7fb4b9+0x6),_0x32feee['getUint8'](_0x7fb4b9+0x7));if(_0x73e0ff===_0x3568ae(0x128)||_0x73e0ff===_0x3568ae(0xf5))try{if(_0x7fb4b9+0x8+_0x1d5206<=_0x32feee[_0x3568ae(0x204)]){const _0x18fcf6=_0x12b56b[_0x3568ae(0x156)](new Uint8Array(_0x16ce10,_0x7fb4b9+0x8,_0x1d5206)),_0x31dfc0=_0x18fcf6[_0x3568ae(0x2a1)]('\x00'),_0x2fd152=_0x31dfc0!==-0x1?_0x18fcf6[_0x3568ae(0x2bb)](_0x31dfc0+0x1):_0x18fcf6,_0x97b9f=_0x2fd152[_0x3568ae(0x2a1)]('{'),_0x3bf85c=_0x2fd152[_0x3568ae(0x2ad)]('}');_0x97b9f!==-0x1&&_0x3bf85c>_0x97b9f&&Object[_0x3568ae(0x1cb)](_0x5b7828,JSON[_0x3568ae(0x27c)](_0x2fd152['substring'](_0x97b9f,_0x3bf85c+0x1)));}}catch(_0x1cd96b){}_0x7fb4b9+=0xc+_0x1d5206;}return parseNovelAIV5JSON(_0x5b7828);}function parseNovelAIV5JSON(_0x57f33b){const _0x17719a=_0x52d41e;if(!_0x57f33b||typeof _0x57f33b!==_0x17719a(0x30c))return null;let _0xd3a81b={};if(typeof _0x57f33b[_0x17719a(0x24f)]===_0x17719a(0x257))try{_0xd3a81b=JSON[_0x17719a(0x27c)](_0x57f33b['Comment']);}catch(_0x2e91cb){}else{if(typeof _0x57f33b['comment']===_0x17719a(0x257))try{_0xd3a81b=JSON[_0x17719a(0x27c)](_0x57f33b[_0x17719a(0x101)]);}catch(_0x578ea3){}}let _0x212b6f=_0x57f33b[_0x17719a(0x31b)]||_0x57f33b[_0x17719a(0x132)]||_0xd3a81b[_0x17719a(0x31b)]||_0xd3a81b[_0x17719a(0x132)]||'';if(!_0x212b6f&&_0x57f33b['v4_prompt']&&_0x57f33b['v4_prompt'][_0x17719a(0x230)]&&_0x57f33b[_0x17719a(0x294)][_0x17719a(0x230)][_0x17719a(0x334)])_0x212b6f=_0x57f33b[_0x17719a(0x294)][_0x17719a(0x230)][_0x17719a(0x334)];if(!_0x212b6f&&_0xd3a81b[_0x17719a(0x294)]&&_0xd3a81b[_0x17719a(0x294)]['caption']&&_0xd3a81b['v4_prompt'][_0x17719a(0x230)][_0x17719a(0x334)])_0x212b6f=_0xd3a81b[_0x17719a(0x294)][_0x17719a(0x230)][_0x17719a(0x334)];let _0x295997=_0x57f33b['uc']||_0x57f33b[_0x17719a(0x238)]||_0x57f33b[_0x17719a(0x23b)]||_0xd3a81b['uc']||_0xd3a81b[_0x17719a(0x238)]||'';if(!_0x295997&&_0x57f33b[_0x17719a(0x2dd)]&&_0x57f33b[_0x17719a(0x2dd)][_0x17719a(0x230)]&&_0x57f33b[_0x17719a(0x2dd)][_0x17719a(0x230)][_0x17719a(0x334)])_0x295997=_0x57f33b[_0x17719a(0x2dd)]['caption'][_0x17719a(0x334)];if(!_0x295997&&_0xd3a81b[_0x17719a(0x2dd)]&&_0xd3a81b['v4_negative_prompt']['caption']&&_0xd3a81b['v4_negative_prompt'][_0x17719a(0x230)][_0x17719a(0x334)])_0x295997=_0xd3a81b[_0x17719a(0x2dd)][_0x17719a(0x230)][_0x17719a(0x334)];let _0x4a1cfd=_0x57f33b['seed']!==undefined?String(_0x57f33b[_0x17719a(0x118)]):_0xd3a81b[_0x17719a(0x118)]!==undefined?String(_0xd3a81b[_0x17719a(0x118)]):'',_0x23000d=[];const _0x3d4589=_0x57f33b[_0x17719a(0x294)]&&_0x57f33b[_0x17719a(0x294)][_0x17719a(0x230)]&&_0x57f33b[_0x17719a(0x294)][_0x17719a(0x230)][_0x17719a(0x126)]||_0xd3a81b[_0x17719a(0x294)]&&_0xd3a81b[_0x17719a(0x294)][_0x17719a(0x230)]&&_0xd3a81b[_0x17719a(0x294)][_0x17719a(0x230)][_0x17719a(0x126)],_0x35c159=_0x57f33b[_0x17719a(0x2dd)]&&_0x57f33b[_0x17719a(0x2dd)][_0x17719a(0x230)]&&_0x57f33b[_0x17719a(0x2dd)][_0x17719a(0x230)]['char_captions']||_0xd3a81b[_0x17719a(0x2dd)]&&_0xd3a81b['v4_negative_prompt'][_0x17719a(0x230)]&&_0xd3a81b[_0x17719a(0x2dd)]['caption'][_0x17719a(0x126)];Array[_0x17719a(0x271)](_0x3d4589)&&_0x3d4589[_0x17719a(0x2e2)]>0x0&&(_0x23000d=_0x3d4589[_0x17719a(0x302)]((_0x621b8c,_0x32b39b)=>{const _0x4cda36=_0x17719a,_0x17dbac=_0x621b8c['char_caption']||'';let _0x473875='';if(Array['isArray'](_0x35c159)&&_0x35c159[_0x32b39b])_0x473875=_0x35c159[_0x32b39b]['char_caption']||'';return{'name':_0x4cda36(0x10c)+(_0x32b39b+0x1),'prompt':_0x17dbac,'uc':_0x473875};})[_0x17719a(0x178)](_0x1fa33d=>_0x1fa33d[_0x17719a(0x31b)]['trim']()!==''||_0x1fa33d['uc']['trim']()!==''));if(_0x23000d[_0x17719a(0x2e2)]===0x0){const _0x16d7c9=_0x57f33b[_0x17719a(0x323)]||_0x57f33b['characters']||_0x57f33b[_0x17719a(0x2d9)]||_0xd3a81b['character_prompts']||[];Array[_0x17719a(0x271)](_0x16d7c9)&&(_0x23000d=_0x16d7c9[_0x17719a(0x302)]((_0x50caed,_0x3af91a)=>{const _0x254fcc=_0x17719a;if(typeof _0x50caed===_0x254fcc(0x257))return{'name':_0x254fcc(0x10c)+(_0x3af91a+0x1),'prompt':_0x50caed,'uc':''};return{'name':_0x50caed[_0x254fcc(0x2d5)]||_0x254fcc(0x10c)+(_0x3af91a+0x1),'prompt':_0x50caed['prompt']||_0x50caed[_0x254fcc(0x2a6)]||'','uc':_0x50caed['uc']||_0x50caed['undesired_content']||''};})[_0x17719a(0x178)](_0x4da8e2=>_0x4da8e2['prompt']['trim']()!==''||_0x4da8e2['uc'][_0x17719a(0x16f)]()!==''));}return{'prompt':_0x212b6f,'uc':_0x295997,'seed':_0x4a1cfd,'characters':_0x23000d};}function createLightMetaItem(_0x4a41bc){const _0x584eee=_0x52d41e,_0x2a5258=[_0x4a41bc[_0x584eee(0x31b)]||''],_0x56f9c9=[];if(Array[_0x584eee(0x271)](_0x4a41bc[_0x584eee(0x19b)]))for(let _0x2e7ebd=0x0;_0x2e7ebd<_0x4a41bc[_0x584eee(0x19b)][_0x584eee(0x2e2)];_0x2e7ebd++){const _0x31154e=_0x4a41bc[_0x584eee(0x19b)][_0x2e7ebd];_0x31154e&&_0x31154e['prompt']&&(_0x2a5258['push'](_0x31154e[_0x584eee(0x31b)]),_0x56f9c9['push'](_0x31154e[_0x584eee(0x31b)]));}const _0x42f268=new Set();let _0x469e1b=![];const _0x54d3c9=_0x2a5258[_0x584eee(0x189)](',\x20')[_0x584eee(0x27d)](/[\r\n,、]+/);for(let _0x4678c4=0x0;_0x4678c4<_0x54d3c9['length'];_0x4678c4++){const _0x3782e0=_0x54d3c9[_0x4678c4][_0x584eee(0x16f)]()[_0x584eee(0x1e8)]();if(!_0x3782e0)continue;const _0x296c22=cleanTag(_0x3782e0);if(_0x296c22){_0x42f268[_0x584eee(0x13d)](_0x296c22);if(_0x296c22===_0x584eee(0x23e)||_0x296c22===_0x584eee(0x1b1))_0x469e1b=!![];}if(_0x3782e0==='nsfw')_0x469e1b=!![];}const _0x2ae913=new Set();if(_0x56f9c9[_0x584eee(0x2e2)]>0x0){const _0x2e4383=_0x56f9c9[_0x584eee(0x189)](',\x20')[_0x584eee(0x27d)](/[\r\n,、]+/);for(let _0x5817c7=0x0;_0x5817c7<_0x2e4383[_0x584eee(0x2e2)];_0x5817c7++){const _0x23a583=cleanTag(_0x2e4383[_0x5817c7][_0x584eee(0x16f)]()[_0x584eee(0x1e8)]());if(_0x23a583)_0x2ae913['add'](_0x23a583);}}const _0x210fa1=getDateTokens(_0x4a41bc[_0x584eee(0x2c3)]);return{'id':_0x4a41bc['id'],'fileName':_0x4a41bc[_0x584eee(0x295)]||'','seed':_0x4a41bc[_0x584eee(0x118)]||'','normalizedPrompt':normalizeFullPrompt(_0x4a41bc[_0x584eee(0x31b)]),'createdAt':_0x4a41bc[_0x584eee(0x2c3)]||0x0,'ymd':_0x210fa1?_0x210fa1[_0x584eee(0x10f)]:'','ym':_0x210fa1?_0x210fa1[_0x584eee(0x130)]:'','cleanTags':_0x42f268,'charCleanTags':_0x2ae913,'isNsfw':_0x469e1b};}function refreshAllViewsAfterDataChange(){const _0x188c05=_0x52d41e;document[_0x188c05(0x120)](_0x188c05(0x324))[_0x188c05(0x1b5)]=lightMetaList[_0x188c05(0x2e2)],document['getElementById'](_0x188c05(0x1a9))[_0x188c05(0x1b5)]=lightMetaList[_0x188c05(0x2e2)];if(currentView===_0x188c05(0x131))renderTagsCloud(document['getElementById']('tagFilterInput')['value'][_0x188c05(0x16f)]());if(currentView===_0x188c05(0x2f3))renderCharTagsCloud(document[_0x188c05(0x120)](_0x188c05(0x246))[_0x188c05(0x162)][_0x188c05(0x16f)]());updateSelectedTagsPanel(),updateSelectedCharTagsPanel(),applyFilterAndRender();}document[_0x52d41e(0x120)]('fileInput')[_0x52d41e(0x179)]('change',async _0x30e25b=>{const _0x6de7e7=_0x52d41e,_0x5be590=Array['from'](_0x30e25b[_0x6de7e7(0x2fb)][_0x6de7e7(0x255)]);if(!_0x5be590['length'])return;window[_0x6de7e7(0x2ae)](_0x6de7e7(0x2f5),{'file_count':_0x5be590[_0x6de7e7(0x2e2)]});const _0x1d839f=document[_0x6de7e7(0x120)](_0x6de7e7(0x148)),_0x2e5d38=document[_0x6de7e7(0x120)]('progressBar'),_0x58fa81=document[_0x6de7e7(0x120)](_0x6de7e7(0xf9)),_0x3a16f7=document['getElementById']('progressStatus');_0x3a16f7[_0x6de7e7(0x1b5)]=t(_0x6de7e7(0x2af),'Importing\x20images\x20(generating\x20thumbnails)...'),_0x1d839f['classList'][_0x6de7e7(0x114)](_0x6de7e7(0x261)),_0x2e5d38[_0x6de7e7(0xef)]['width']='0%';let _0x198a7b=0x0,_0x119c2c=0x0,_0x4d6d46=0x0;const _0x3d71d6=new Set(await db[_0x6de7e7(0x26d)][_0x6de7e7(0x29f)]('imageHash')[_0x6de7e7(0x274)]()),_0x259302=0x19;for(let _0x539b68=0x0;_0x539b68<_0x5be590[_0x6de7e7(0x2e2)];_0x539b68+=_0x259302){const _0x3b81df=_0x5be590[_0x6de7e7(0x11b)](_0x539b68,_0x539b68+_0x259302),_0x3d26f9=[],_0x506b52=[];for(let _0x2878d8=0x0;_0x2878d8<_0x3b81df[_0x6de7e7(0x2e2)];_0x2878d8++){const _0x2c83d7=_0x3b81df[_0x2878d8];try{const _0x44f8ba=await _0x2c83d7[_0x6de7e7(0x113)](),_0x43f7e6=await calculateSHA256(_0x44f8ba);if(_0x3d71d6[_0x6de7e7(0xff)](_0x43f7e6))_0x119c2c++;else{const _0x3c8901=extractNovelAIMetadata(_0x44f8ba)||{'prompt':'','uc':'','seed':'','characters':[]},_0x19aae4=await createThumbnailBlob(_0x2c83d7,0xdc),_0x2bd327=_0x2c83d7['lastModified']?_0x2c83d7[_0x6de7e7(0x1fe)]:Date['now']();_0x3d26f9[_0x6de7e7(0x286)]({'imageHash':_0x43f7e6,'fileName':_0x2c83d7['name'],'thumbBlob':_0x19aae4||_0x2c83d7,'prompt':_0x3c8901[_0x6de7e7(0x31b)],'uc':_0x3c8901['uc'],'seed':_0x3c8901[_0x6de7e7(0x118)],'characters':_0x3c8901['characters'],'createdAt':_0x2bd327}),_0x506b52[_0x6de7e7(0x286)](_0x2c83d7),_0x3d71d6[_0x6de7e7(0x13d)](_0x43f7e6);}}catch(_0x45230f){console[_0x6de7e7(0x332)](_0x45230f),_0x4d6d46++;}}if(_0x3d26f9[_0x6de7e7(0x2e2)]>0x0){const _0xb230d8=await db[_0x6de7e7(0x26d)]['bulkAdd'](_0x3d26f9,{'allKeys':!![]}),_0x23d281=[];for(let _0x26c66f=0x0;_0x26c66f<_0xb230d8[_0x6de7e7(0x2e2)];_0x26c66f++){_0x3d26f9[_0x26c66f]['id']=_0xb230d8[_0x26c66f],lightMetaList[_0x6de7e7(0x286)](createLightMetaItem(_0x3d26f9[_0x26c66f]));if(_0x506b52[_0x26c66f])_0x23d281['push']({'id':_0xb230d8[_0x26c66f],'blob':_0x506b52[_0x26c66f]});}if(_0x23d281['length']>0x0)await db['images']['bulkPut'](_0x23d281);_0x198a7b+=_0x3d26f9[_0x6de7e7(0x2e2)];}const _0x3e9b4e=Math[_0x6de7e7(0x26a)](_0x539b68+_0x259302,_0x5be590[_0x6de7e7(0x2e2)]),_0x3212ed=Math['round'](_0x3e9b4e/_0x5be590['length']*0x64);_0x2e5d38[_0x6de7e7(0xef)][_0x6de7e7(0x17d)]=_0x3212ed+'%',currentLang==='en'?_0x58fa81[_0x6de7e7(0x1b5)]=isMobileUI?_0x3e9b4e+_0x6de7e7(0x1a5)+_0x5be590[_0x6de7e7(0x2e2)]+_0x6de7e7(0x2e0)+_0x198a7b+_0x6de7e7(0x124)+_0x119c2c+')':_0x3e9b4e+_0x6de7e7(0x1a5)+_0x5be590[_0x6de7e7(0x2e2)]+_0x6de7e7(0x282)+_0x198a7b+_0x6de7e7(0x1f0)+_0x119c2c+_0x6de7e7(0x17a)+_0x4d6d46+')':_0x58fa81['innerText']=isMobileUI?_0x3e9b4e+_0x6de7e7(0x1a5)+_0x5be590[_0x6de7e7(0x2e2)]+'\x20(追加:'+_0x198a7b+',\x20スキップ:'+_0x119c2c+')':_0x3e9b4e+'\x20/\x20'+_0x5be590['length']+_0x6de7e7(0x2b3)+_0x198a7b+_0x6de7e7(0x21a)+_0x119c2c+',\x20エラー:\x20'+_0x4d6d46+')',await new Promise(_0x5ae552=>setTimeout(_0x5ae552,0x0));}_0x30e25b[_0x6de7e7(0x2fb)][_0x6de7e7(0x162)]='',setTimeout(()=>{const _0x2ab5dc=_0x6de7e7;_0x1d839f[_0x2ab5dc(0xdf)][_0x2ab5dc(0x13d)](_0x2ab5dc(0x261)),refreshAllViewsAfterDataChange();},0x12c);});async function initLoad(){const _0x6d94e6=_0x52d41e;applyUILayoutClasses(),syncDateEmptyState(),lightMetaList=[];const _0x9930e1=await db[_0x6d94e6(0x26d)][_0x6d94e6(0x299)]()[_0x6d94e6(0x273)](),_0x51bd46=_0x9930e1[_0x6d94e6(0x2e2)],_0x48b37b=0x9c4;for(let _0x53b8ae=0x0;_0x53b8ae<_0x51bd46;_0x53b8ae+=_0x48b37b){const _0x2925fe=_0x9930e1[_0x6d94e6(0x11b)](_0x53b8ae,_0x53b8ae+_0x48b37b),_0x7ef6b0=await db['metadata'][_0x6d94e6(0x207)](_0x2925fe);for(let _0x2c24cf=0x0;_0x2c24cf<_0x7ef6b0[_0x6d94e6(0x2e2)];_0x2c24cf++){const _0x4047f1=_0x7ef6b0[_0x2c24cf];if(_0x4047f1)lightMetaList[_0x6d94e6(0x286)](createLightMetaItem(_0x4047f1));}}refreshAllViewsAfterDataChange();}function getContextualTagStats(){const _0x5208a5=_0x52d41e,_0x20d43f=new Map(),_0x44da4b=Array[_0x5208a5(0x223)](selectedTags),_0x290e55=document[_0x5208a5(0x120)](_0x5208a5(0xdd))[_0x5208a5(0x2c7)];for(let _0x36b6b5=0x0;_0x36b6b5<lightMetaList[_0x5208a5(0x2e2)];_0x36b6b5++){const _0x20fcaf=lightMetaList[_0x36b6b5];if(!_0x290e55&&_0x20fcaf['isNsfw'])continue;let _0x311b23=!![];for(let _0x3b7036=0x0;_0x3b7036<_0x44da4b[_0x5208a5(0x2e2)];_0x3b7036++){if(!_0x20fcaf[_0x5208a5(0x279)][_0x5208a5(0xff)](_0x44da4b[_0x3b7036])){_0x311b23=![];break;}}if(_0x311b23)_0x20fcaf[_0x5208a5(0x279)][_0x5208a5(0x298)](_0x486f3c=>_0x20d43f[_0x5208a5(0x1c3)](_0x486f3c,(_0x20d43f[_0x5208a5(0x317)](_0x486f3c)||0x0)+0x1));}return _0x20d43f;}function getContextualCharTagStats(){const _0x171789=_0x52d41e,_0x3dbe25=new Map(),_0x5ec711=Array[_0x171789(0x223)](selectedCharTags),_0x21f0dd=document[_0x171789(0x120)](_0x171789(0xdd))['checked'];for(let _0x4fd04b=0x0;_0x4fd04b<lightMetaList[_0x171789(0x2e2)];_0x4fd04b++){const _0x282034=lightMetaList[_0x4fd04b];if(!_0x21f0dd&&_0x282034['isNsfw'])continue;if(_0x282034[_0x171789(0x19a)][_0x171789(0x311)]===0x0)continue;let _0x19dcd8=!![];for(let _0x487dfe=0x0;_0x487dfe<_0x5ec711[_0x171789(0x2e2)];_0x487dfe++){if(!_0x282034[_0x171789(0x19a)][_0x171789(0xff)](_0x5ec711[_0x487dfe])){_0x19dcd8=![];break;}}if(_0x19dcd8)_0x282034['charCleanTags'][_0x171789(0x298)](_0xcb4709=>_0x3dbe25[_0x171789(0x1c3)](_0xcb4709,(_0x3dbe25['get'](_0xcb4709)||0x0)+0x1));}return _0x3dbe25;}function normalizeDateKeyword(_0x328865){const _0x3ebce4=_0x52d41e;return _0x328865[_0x3ebce4(0x28c)](/^作成日:\s*/,'')['replace'](/^date:\s*/,'')['trim']()[_0x3ebce4(0x28c)](/-/g,'/');}function applyFilterAndRender(){const _0x3e40f6=_0x52d41e;syncDateEmptyState();const _0x21888e=document[_0x3e40f6(0x120)]('searchInput')['value'],_0x4ab6ea=document['getElementById']('dateFromInput')[_0x3e40f6(0x162)],_0x34d7fd=document[_0x3e40f6(0x120)](_0x3e40f6(0x27f))[_0x3e40f6(0x162)],_0x12f718=document[_0x3e40f6(0x120)]('nsfwToggle')['checked'];document[_0x3e40f6(0x120)](_0x3e40f6(0x17e))[_0x3e40f6(0xdf)][_0x3e40f6(0x209)](_0x3e40f6(0x261),!_0x21888e[_0x3e40f6(0x16f)]()&&!activeExactPromptMatch),document[_0x3e40f6(0x120)](_0x3e40f6(0x301))[_0x3e40f6(0xdf)][_0x3e40f6(0x209)](_0x3e40f6(0x261),!_0x4ab6ea&&!_0x34d7fd);let _0x3a4620=lightMetaList;if(!_0x12f718)_0x3a4620=_0x3a4620['filter'](_0x41f3a5=>!_0x41f3a5[_0x3e40f6(0x138)]);if(_0x4ab6ea||_0x34d7fd){let _0x2c5d9f=-Infinity,_0x82d304=Infinity;if(_0x4ab6ea){const [_0x3d65ac,_0x5cb083,_0x3da4ad]=_0x4ab6ea['split']('-')[_0x3e40f6(0x302)](Number);_0x2c5d9f=new Date(_0x3d65ac,_0x5cb083-0x1,_0x3da4ad,0x0,0x0,0x0,0x0)[_0x3e40f6(0x2c5)]();}if(_0x34d7fd){const [_0x5a4507,_0x4b1fd0,_0x59ef2c]=_0x34d7fd['split']('-')[_0x3e40f6(0x302)](Number);_0x82d304=new Date(_0x5a4507,_0x4b1fd0-0x1,_0x59ef2c,0x17,0x3b,0x3b,0x3e7)[_0x3e40f6(0x2c5)]();}_0x3a4620=_0x3a4620[_0x3e40f6(0x178)](_0x4363ca=>_0x4363ca['createdAt']&&_0x4363ca[_0x3e40f6(0x2c3)]>=_0x2c5d9f&&_0x4363ca[_0x3e40f6(0x2c3)]<=_0x82d304);}if(activeExactPromptMatch){const _0x472f6e=normalizeFullPrompt(activeExactPromptMatch);_0x3a4620=_0x3a4620['filter'](_0x5dcdae=>_0x5dcdae[_0x3e40f6(0x187)]===_0x472f6e);}else{if(_0x21888e[_0x3e40f6(0x16f)]()['length']>0x0){const _0x49fa3f=_0x21888e['trim'](),_0x4486c1=_0x49fa3f[_0x3e40f6(0x2e9)](/^["「『]([\s\S]*)["」』]$/);if(_0x4486c1){const _0x3eac97=normalizeFullPrompt(_0x4486c1[0x1]);_0x3a4620=_0x3a4620[_0x3e40f6(0x178)](_0xb140da=>_0xb140da[_0x3e40f6(0x187)]===_0x3eac97);}else{const _0x13b3b0=_0x21888e[_0x3e40f6(0x27d)](/[,、]/)[_0x3e40f6(0x302)](_0x4e1607=>_0x4e1607['trim']()[_0x3e40f6(0x1e8)]())[_0x3e40f6(0x178)](_0x505240=>_0x505240[_0x3e40f6(0x2e2)]>0x0);_0x13b3b0[_0x3e40f6(0x2e2)]>0x0&&(_0x3a4620=_0x3a4620[_0x3e40f6(0x178)](_0x221ef8=>{const _0x15cada=_0x3e40f6,_0x105d5c=_0x221ef8['fileName'][_0x15cada(0x1e8)](),_0x34132e=_0x221ef8[_0x15cada(0x118)][_0x15cada(0x1e8)]();return _0x13b3b0[_0x15cada(0x1e1)](_0x3191ea=>{const _0x23fed7=_0x15cada,_0x27915a=cleanTag(_0x3191ea),_0x20d717=normalizeDateKeyword(_0x3191ea),_0x5c50b3=_0x20d717&&(_0x221ef8[_0x23fed7(0x11c)]===_0x20d717||_0x221ef8['ym']===_0x20d717),_0x1a6f03=_0x221ef8[_0x23fed7(0x279)][_0x23fed7(0xff)](_0x3191ea)||_0x27915a&&_0x221ef8['cleanTags'][_0x23fed7(0xff)](_0x27915a);return _0x5c50b3||_0x1a6f03||_0x105d5c[_0x23fed7(0x25b)](_0x3191ea)||_0x34132e[_0x23fed7(0x25b)](_0x3191ea);});}));}}}_0x3a4620=_0x3a4620[_0x3e40f6(0x11b)]()[_0x3e40f6(0x216)]((_0x3b4e15,_0x1d1ac0)=>{const _0x17932d=_0x3e40f6;if(currentSort==='createdAt_desc')return(_0x1d1ac0[_0x17932d(0x2c3)]||0x0)-(_0x3b4e15['createdAt']||0x0);if(currentSort===_0x17932d(0x1a7))return(_0x3b4e15[_0x17932d(0x2c3)]||0x0)-(_0x1d1ac0[_0x17932d(0x2c3)]||0x0);if(currentSort===_0x17932d(0x220))return _0x3b4e15[_0x17932d(0x295)]['localeCompare'](_0x1d1ac0[_0x17932d(0x295)]);if(currentSort==='fileName_desc')return _0x1d1ac0['fileName']['localeCompare'](_0x3b4e15[_0x17932d(0x295)]);return(_0x1d1ac0[_0x17932d(0x2c3)]||0x0)-(_0x3b4e15['createdAt']||0x0);}),filteredIds=_0x3a4620[_0x3e40f6(0x302)](_0x417afb=>_0x417afb['id']),currentPage=0x1,renderCurrentPage();}document['getElementById'](_0x52d41e(0xdb))[_0x52d41e(0x179)](_0x52d41e(0x27a),_0x373c5c=>{currentSort=_0x373c5c['target']['value'],applyFilterAndRender();}),document[_0x52d41e(0x120)](_0x52d41e(0xdd))['addEventListener']('change',()=>{const _0xf01ed=_0x52d41e;if(currentView===_0xf01ed(0x131))renderTagsCloud(document[_0xf01ed(0x120)]('tagFilterInput')[_0xf01ed(0x162)]['trim']());if(currentView===_0xf01ed(0x2f3))renderCharTagsCloud(document[_0xf01ed(0x120)]('charTagFilterInput')[_0xf01ed(0x162)][_0xf01ed(0x16f)]());applyFilterAndRender();}),document[_0x52d41e(0x120)](_0x52d41e(0x2ed))[_0x52d41e(0x179)](_0x52d41e(0x27a),applyFilterAndRender),document[_0x52d41e(0x120)](_0x52d41e(0x2ed))[_0x52d41e(0x179)](_0x52d41e(0x159),syncDateEmptyState),document[_0x52d41e(0x120)](_0x52d41e(0x27f))[_0x52d41e(0x179)](_0x52d41e(0x27a),applyFilterAndRender),document['getElementById'](_0x52d41e(0x27f))['addEventListener'](_0x52d41e(0x159),syncDateEmptyState),document[_0x52d41e(0x120)](_0x52d41e(0x301))['onclick']=()=>{const _0x3211b1=_0x52d41e;document[_0x3211b1(0x120)](_0x3211b1(0x2ed))[_0x3211b1(0x162)]='',document[_0x3211b1(0x120)](_0x3211b1(0x27f))['value']='',applyFilterAndRender();};async function renderCurrentPage(){const _0x8db3b1=_0x52d41e;currentObjectUrls[_0x8db3b1(0x298)](_0x4ecc18=>URL[_0x8db3b1(0x144)](_0x4ecc18)),currentObjectUrls=[];const _0x255d38=filteredIds[_0x8db3b1(0x2e2)],_0x2ac8f9=Math['max'](0x1,Math[_0x8db3b1(0x19d)](_0x255d38/PAGE_SIZE));if(currentPage>_0x2ac8f9)currentPage=_0x2ac8f9;document['getElementById'](_0x8db3b1(0x251))[_0x8db3b1(0x1b5)]=_0x2ac8f9,document[_0x8db3b1(0x120)](_0x8db3b1(0x1e2))[_0x8db3b1(0x1b5)]=_0x2ac8f9;const _0x10fe56=document['getElementById'](_0x8db3b1(0x2fc)),_0x343243=document[_0x8db3b1(0x120)](_0x8db3b1(0x2ca));_0x10fe56['value']=currentPage,_0x10fe56[_0x8db3b1(0x145)]=_0x2ac8f9,_0x343243[_0x8db3b1(0x162)]=currentPage,_0x343243['max']=_0x2ac8f9;const _0x329d1a=isMobileUI?t(_0x255d38+'\x20件',_0x255d38+_0x8db3b1(0x13e)):t(_0x255d38+_0x8db3b1(0x1d6),_0x255d38+_0x8db3b1(0x176));document[_0x8db3b1(0x120)](_0x8db3b1(0x127))[_0x8db3b1(0x1b5)]=_0x329d1a,document[_0x8db3b1(0x120)](_0x8db3b1(0x291))[_0x8db3b1(0x1b5)]=_0x329d1a;const _0x3d8012=currentPage<=0x1,_0x538e14=currentPage>=_0x2ac8f9;document['getElementById']('btnPrevPage')['disabled']=_0x3d8012,document[_0x8db3b1(0x120)]('btnNextPage')[_0x8db3b1(0x31d)]=_0x538e14,document[_0x8db3b1(0x120)](_0x8db3b1(0x180))[_0x8db3b1(0x31d)]=_0x3d8012,document[_0x8db3b1(0x120)](_0x8db3b1(0x1ee))['disabled']=_0x538e14;const _0x51efaa=document[_0x8db3b1(0x120)](_0x8db3b1(0x2e4)),_0x5a088c=document['getElementById'](_0x8db3b1(0x108)),_0x1f1629=currentView===_0x8db3b1(0x131)||currentView===_0x8db3b1(0x2f3);if(_0x255d38===0x0){document['getElementById'](_0x8db3b1(0xf4))[_0x8db3b1(0x296)]='',document[_0x8db3b1(0x120)]('matrixTableBody')[_0x8db3b1(0x296)]='',_0x51efaa[_0x8db3b1(0xdf)][_0x8db3b1(0x209)](_0x8db3b1(0x261),_0x1f1629),_0x5a088c[_0x8db3b1(0xdf)][_0x8db3b1(0x13d)](_0x8db3b1(0x261)),lucide[_0x8db3b1(0xf3)]();return;}_0x51efaa['classList'][_0x8db3b1(0x13d)](_0x8db3b1(0x261)),_0x5a088c[_0x8db3b1(0xdf)][_0x8db3b1(0x209)](_0x8db3b1(0x261),_0x1f1629);const _0x363e40=(currentPage-0x1)*PAGE_SIZE,_0x5e4e5d=filteredIds['slice'](_0x363e40,_0x363e40+PAGE_SIZE),_0x1b109c=await db[_0x8db3b1(0x26d)]['bulkGet'](_0x5e4e5d),_0x2e033a=_0x1b109c['filter'](Boolean),_0x5be84f=_0x6dd2a=>t(_0x8db3b1(0x250)+_0x6dd2a+'」で検索',_0x8db3b1(0x2ac)+_0x6dd2a+'\x22'),_0x512a2f=t('原寸拡大',_0x8db3b1(0x1ea)),_0x21c4d8=t('編集',_0x8db3b1(0x275)),_0xd93f9c=t('削除',_0x8db3b1(0x1bb)),_0x37f301=t('詳細',_0x8db3b1(0x314)),_0x3d5cae=t(_0x8db3b1(0x1ed),_0x8db3b1(0x2a5)),_0x2ac81a=t(_0x8db3b1(0x2be),'Copy\x20Prompt'),_0x296052=t(_0x8db3b1(0x2bd),_0x8db3b1(0x21e)),_0x4b1f98=t(_0x8db3b1(0x2b9),'No\x20character\x20slots'),_0x5adb12=t(_0x8db3b1(0x107),_0x8db3b1(0x31f)),_0xd1d748=t(_0x8db3b1(0x175),_0x8db3b1(0x2b4)),_0x5b5ad9=t(_0x8db3b1(0x149),'Character\x20Prompts'),_0x564b80=document[_0x8db3b1(0x120)](_0x8db3b1(0xf4));_0x564b80[_0x8db3b1(0x296)]=_0x2e033a[_0x8db3b1(0x302)](_0x532646=>{const _0x774574=_0x8db3b1;let _0x4f23d9='';_0x532646['thumbBlob']&&(_0x4f23d9=URL[_0x774574(0x143)](_0x532646[_0x774574(0x22e)]),currentObjectUrls[_0x774574(0x286)](_0x4f23d9));const _0x5b27e1=formatDateOnly(_0x532646[_0x774574(0x2c3)]);if(isMobileUI)return _0x774574(0x201)+_0x532646['id']+_0x774574(0x16c)+_0x4f23d9+_0x774574(0x2f6)+(_0x532646[_0x774574(0x295)]||'')+_0x774574(0x1d2)+(_0x532646[_0x774574(0x295)]||'')+'\x22>'+(_0x532646[_0x774574(0x295)]||'')+_0x774574(0x305)+(_0x532646[_0x774574(0x118)]?'#'+String(_0x532646[_0x774574(0x118)])[_0x774574(0x11b)](-0x4):'')+'</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22mt-0.5\x20flex\x20items-center\x20justify-between\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22event.stopPropagation();\x20searchByDateTag(\x27'+_0x5b27e1+_0x774574(0x2e1)+_0x5be84f(_0x5b27e1)+'\x22>'+formatDateTime(_0x532646['createdAt'])+_0x774574(0xf0)+_0x532646['id']+_0x774574(0x1ff)+_0x512a2f+'\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22maximize-2\x22\x20class=\x22w-3.5\x20h-3.5\x22></i>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22event.stopPropagation();\x20openEditModal('+_0x532646['id']+')\x22\x20class=\x22p-1.5\x20bg-indigo-950\x20hover:bg-indigo-800\x20active:bg-indigo-700\x20text-indigo-300\x20rounded-md\x22\x20title=\x22'+_0x21c4d8+_0x774574(0x200)+_0x532646['id']+')\x22\x20class=\x22p-1.5\x20bg-rose-950/80\x20hover:bg-rose-800\x20active:bg-rose-700\x20text-rose-300\x20rounded-md\x22\x20title=\x22'+_0xd93f9c+'\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<i\x20data-lucide=\x22trash-2\x22\x20class=\x22w-3.5\x20h-3.5\x22></i>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20';return'\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22group\x20relative\x20rounded-lg\x20overflow-hidden\x20bg-slate-950\x20border\x20border-slate-800\x20hover:border-indigo-500\x20transition\x20cursor-pointer\x20shadow\x20flex\x20flex-col\x20items-center\x20justify-center\x20p-1.5\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20onclick=\x22openDetailModalById('+_0x532646['id']+_0x774574(0x268)+_0x4f23d9+_0x774574(0x2b1)+(_0x532646[_0x774574(0x295)]||'')+_0x774574(0x192)+(_0x532646[_0x774574(0x295)]||'')+'\x22>'+(_0x532646[_0x774574(0x295)]||'')+_0x774574(0x24e)+(_0x532646[_0x774574(0x118)]?'#'+String(_0x532646['seed'])[_0x774574(0x11b)](-0x4):'')+_0x774574(0x142)+_0x5b27e1+_0x774574(0x2ef)+_0x5be84f(_0x5b27e1)+'\x22>'+formatDateTime(_0x532646[_0x774574(0x2c3)])+_0x774574(0x25d)+_0x532646['id']+_0x774574(0x1cd)+_0x512a2f+_0x774574(0x10a)+_0x532646['id']+')\x22\x20class=\x22pointer-events-auto\x20p-1.5\x20bg-indigo-600\x20hover:bg-indigo-500\x20text-white\x20rounded\x22\x20title=\x22'+_0x21c4d8+_0x774574(0x12a)+_0x532646['id']+')\x22\x20class=\x22pointer-events-auto\x20p-1.5\x20bg-rose-600\x20hover:bg-rose-500\x20text-white\x20rounded\x22\x20title=\x22'+_0xd93f9c+_0x774574(0xe4);})[_0x8db3b1(0x189)]('');const _0x2e68a4=document[_0x8db3b1(0x120)]('matrixTableBody');_0x2e68a4[_0x8db3b1(0x296)]=_0x2e033a['map'](_0x1a877f=>{const _0x4f2c90=_0x8db3b1;let _0x34e956='';_0x1a877f[_0x4f2c90(0x22e)]&&(_0x34e956=URL[_0x4f2c90(0x143)](_0x1a877f[_0x4f2c90(0x22e)]),currentObjectUrls[_0x4f2c90(0x286)](_0x34e956));const _0x8301cf=formatDateOnly(_0x1a877f['createdAt']),_0x360c25=_0x1a877f[_0x4f2c90(0x19b)]&&_0x1a877f[_0x4f2c90(0x19b)][_0x4f2c90(0x2e2)]>0x0?_0x1a877f['characters']['map']((_0x47e6c7,_0x3f9436)=>_0x4f2c90(0x309)+(_0x47e6c7['name']||t(_0x4f2c90(0x10c)+(_0x3f9436+0x1),'Char\x20'+(_0x3f9436+0x1)))+_0x4f2c90(0x2a9)+escapeQuotes(_0x47e6c7[_0x4f2c90(0x31b)])+_0x4f2c90(0xe0)+_0x2ac81a+_0x4f2c90(0x2d4)+(_0x47e6c7['uc']?_0x4f2c90(0x237)+escapeQuotes(_0x47e6c7['uc'])+_0x4f2c90(0x161)+_0x296052+_0x4f2c90(0x281):'')+_0x4f2c90(0x1b2)+_0x47e6c7[_0x4f2c90(0x31b)]+'\x22>'+(_0x47e6c7[_0x4f2c90(0x31b)]||'-')+_0x4f2c90(0x2c1)+(_0x47e6c7['uc']?_0x4f2c90(0x283)+_0x47e6c7['uc']+'\x22>'+t('除外','UC')+':\x20'+_0x47e6c7['uc']+_0x4f2c90(0x1d7):'')+_0x4f2c90(0x164))[_0x4f2c90(0x189)](''):_0x4f2c90(0x24b)+_0x4b1f98+_0x4f2c90(0x2e6);if(isMobileUI)return'\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<tr\x20class=\x22block\x20md:table-row\x20bg-slate-900/90\x20md:bg-transparent\x20border\x20border-slate-800\x20md:border-0\x20rounded-xl\x20md:rounded-none\x20p-3\x20md:p-0\x20hover:bg-slate-800/40\x20align-top\x20shadow\x20md:shadow-none\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22block\x20md:table-cell\x20md:p-3\x20text-center\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20md:block\x20items-center\x20gap-3\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20justify-center\x20h-[100px]\x20w-[100px]\x20md:h-auto\x20md:min-h-[90px]\x20md:max-h-[160px]\x20md:w-full\x20bg-slate-950/60\x20rounded-lg\x20p-1\x20border\x20border-slate-800\x20shrink-0\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<img\x20src=\x22'+_0x34e956+_0x4f2c90(0x12e)+_0x1a877f['id']+_0x4f2c90(0x1f8)+_0x512a2f+_0x4f2c90(0x32c)+(_0x1a877f[_0x4f2c90(0x295)]||'')+'</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22searchByDateTag(\x27'+_0x8301cf+_0x4f2c90(0x28e)+_0x5be84f(_0x8301cf)+'\x22>'+formatDateTime(_0x1a877f[_0x4f2c90(0x2c3)])+'</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20gap-1.5\x20text-xs\x20font-mono\x20text-indigo-400\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span>Seed:\x20'+(_0x1a877f['seed']||'-')+_0x4f2c90(0x276)+(_0x1a877f['seed']?_0x4f2c90(0x237)+_0x1a877f[_0x4f2c90(0x118)]+_0x4f2c90(0x32f):'')+_0x4f2c90(0x31a)+_0x8301cf+_0x4f2c90(0x29a)+_0x5be84f(_0x8301cf)+'\x22>'+formatDateTime(_0x1a877f[_0x4f2c90(0x2c3)])+_0x4f2c90(0x290)+(_0x1a877f[_0x4f2c90(0x118)]||'-')+_0x4f2c90(0x171)+(_0x1a877f[_0x4f2c90(0x118)]?_0x4f2c90(0x237)+_0x1a877f[_0x4f2c90(0x118)]+'\x27)\x22\x20class=\x22text-slate-500\x20hover:text-slate-300\x22><i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i></button>':'')+'\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22block\x20md:table-cell\x20mt-2.5\x20md:mt-0\x20pt-2.5\x20md:pt-3\x20border-t\x20border-slate-800/80\x20md:border-0\x20md:p-3\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20justify-between\x20mb-1\x20md:hidden\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22text-[11px]\x20font-bold\x20text-slate-300\x22>'+_0x5adb12+_0x4f2c90(0x278)+escapeQuotes(_0x1a877f[_0x4f2c90(0x31b)])+'\x27)\x22\x20class=\x22text-[11px]\x20text-indigo-400\x20flex\x20items-center\x20gap-1\x22><i\x20data-lucide=\x22copy\x22\x20class=\x22w-3\x20h-3\x22></i>\x20'+_0x3d5cae+_0x4f2c90(0x140)+(_0x1a877f['prompt']||'-')+_0x4f2c90(0x1c6)+escapeQuotes(_0x1a877f[_0x4f2c90(0x31b)])+_0x4f2c90(0x102)+_0x3d5cae+_0x4f2c90(0x17c)+_0xd1d748+_0x4f2c90(0x171)+(_0x1a877f['uc']?_0x4f2c90(0x237)+escapeQuotes(_0x1a877f['uc'])+_0x4f2c90(0x27b)+_0x3d5cae+_0x4f2c90(0x281):'')+'\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22font-mono\x20text-[11px]\x20text-rose-300\x20max-h-24\x20md:max-h-36\x20overflow-y-auto\x20leading-relaxed\x20select-all\x20bg-slate-950/50\x20md:bg-transparent\x20p-2\x20md:p-0\x20rounded\x22>'+(_0x1a877f['uc']||'-')+_0x4f2c90(0x2c1)+(_0x1a877f['uc']?_0x4f2c90(0x237)+escapeQuotes(_0x1a877f['uc'])+_0x4f2c90(0x123)+_0x3d5cae+_0x4f2c90(0x281):'')+_0x4f2c90(0x1f2)+_0x5b5ad9+_0x4f2c90(0x32d)+_0x360c25+_0x4f2c90(0xe9)+_0x1a877f['id']+_0x4f2c90(0x18d)+_0x37f301+_0x4f2c90(0x236)+_0x1a877f['id']+_0x4f2c90(0x1f3)+_0x21c4d8+_0x4f2c90(0x1db)+_0x1a877f['id']+')\x22\x20class=\x22w-full\x20px-2\x20py-2\x20md:py-1\x20bg-rose-900/30\x20hover:bg-rose-800/50\x20text-rose-300\x20rounded-lg\x20md:rounded\x20text-xs\x20md:text-[11px]\x20border\x20border-rose-700/40\x20font-medium\x22>'+_0xd93f9c+_0x4f2c90(0x106);return _0x4f2c90(0xda)+_0x34e956+_0x4f2c90(0x241)+_0x1a877f['id']+_0x4f2c90(0x1f8)+_0x512a2f+_0x4f2c90(0x1c4)+_0x8301cf+_0x4f2c90(0x2b0)+_0x5be84f(_0x8301cf)+'\x22>'+formatDateTime(_0x1a877f[_0x4f2c90(0x2c3)])+'</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20items-center\x20gap-1\x20text-indigo-400\x20select-all\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span>'+(_0x1a877f[_0x4f2c90(0x118)]||'-')+_0x4f2c90(0x23a)+(_0x1a877f[_0x4f2c90(0x118)]?_0x4f2c90(0x237)+_0x1a877f['seed']+_0x4f2c90(0x32e):'')+_0x4f2c90(0x24d)+(_0x1a877f[_0x4f2c90(0x31b)]||'-')+_0x4f2c90(0x25f)+escapeQuotes(_0x1a877f['prompt'])+_0x4f2c90(0x2cc)+_0x3d5cae+_0x4f2c90(0x1c8)+(_0x1a877f['uc']||'-')+_0x4f2c90(0x234)+(_0x1a877f['uc']?'\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22copyText(\x27'+escapeQuotes(_0x1a877f['uc'])+_0x4f2c90(0x25e)+_0x3d5cae+_0x4f2c90(0xe7):'')+_0x4f2c90(0x2ce)+_0x360c25+'</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</td>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<td\x20class=\x22p-3\x20text-center\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20flex-col\x20gap-1\x20items-center\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22openDetailModalById('+_0x1a877f['id']+_0x4f2c90(0x1dd)+_0x37f301+'</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22openEditModal('+_0x1a877f['id']+_0x4f2c90(0x21c)+_0x21c4d8+_0x4f2c90(0x158)+_0x1a877f['id']+')\x22\x20class=\x22w-full\x20px-2\x20py-1\x20bg-rose-900/30\x20hover:bg-rose-800/50\x20text-rose-300\x20rounded\x20text-[11px]\x20border\x20border-rose-700/40\x22>'+_0xd93f9c+_0x4f2c90(0x211);})['join'](''),lucide[_0x8db3b1(0xf3)]();}function goToPrevPage(){currentPage>0x1&&(currentPage--,renderCurrentPage(),scrollToTop());}function goToNextPage(){const _0x1b6c3c=_0x52d41e,_0x477788=Math[_0x1b6c3c(0x145)](0x1,Math[_0x1b6c3c(0x19d)](filteredIds[_0x1b6c3c(0x2e2)]/PAGE_SIZE));currentPage<_0x477788&&(currentPage++,renderCurrentPage(),scrollToTop());}function jumpToPageFromInput(_0x4f4052){const _0x14942c=_0x52d41e,_0x4a9508=Math[_0x14942c(0x145)](0x1,Math[_0x14942c(0x19d)](filteredIds['length']/PAGE_SIZE)),_0x46d782=document[_0x14942c(0x120)](_0x4f4052);let _0x3467ca=parseInt(_0x46d782['value'],0xa);if(isNaN(_0x3467ca)||_0x3467ca<0x1)_0x3467ca=0x1;if(_0x3467ca>_0x4a9508)_0x3467ca=_0x4a9508;currentPage=_0x3467ca,renderCurrentPage(),scrollToTop();}document[_0x52d41e(0x120)](_0x52d41e(0x1e7))[_0x52d41e(0x2a3)]=goToPrevPage,document['getElementById']('btnNextPage')[_0x52d41e(0x2a3)]=goToNextPage,document['getElementById'](_0x52d41e(0x1d9))['onclick']=()=>jumpToPageFromInput(_0x52d41e(0x2fc)),document[_0x52d41e(0x120)]('pageJumpInput')[_0x52d41e(0x179)]('keydown',_0x94603c=>{const _0x27aba3=_0x52d41e;_0x94603c[_0x27aba3(0x1bd)]===_0x27aba3(0x1d8)&&(_0x94603c[_0x27aba3(0x116)](),jumpToPageFromInput(_0x27aba3(0x2fc)));}),document[_0x52d41e(0x120)](_0x52d41e(0x180))[_0x52d41e(0x2a3)]=goToPrevPage,document[_0x52d41e(0x120)](_0x52d41e(0x1ee))[_0x52d41e(0x2a3)]=goToNextPage,document[_0x52d41e(0x120)](_0x52d41e(0x28d))[_0x52d41e(0x2a3)]=()=>jumpToPageFromInput(_0x52d41e(0x2ca)),document[_0x52d41e(0x120)](_0x52d41e(0x2ca))['addEventListener'](_0x52d41e(0x112),_0x26281e=>{const _0x4b79ec=_0x52d41e;_0x26281e[_0x4b79ec(0x1bd)]===_0x4b79ec(0x1d8)&&(_0x26281e[_0x4b79ec(0x116)](),jumpToPageFromInput(_0x4b79ec(0x2ca)));}),document[_0x52d41e(0x120)](_0x52d41e(0x262))[_0x52d41e(0x2a3)]=scrollToTop;function renderClickableTags(_0x1a34a5){const _0x5d06d1=_0x52d41e;if(!_0x1a34a5)return _0x5d06d1(0x30a)+t(_0x5d06d1(0x1c2),_0x5d06d1(0x297))+_0x5d06d1(0x2e6);const _0x25aa15=_0x1a34a5['split'](/([,、\r\n]+)/);return _0x25aa15[_0x5d06d1(0x302)](_0x1e7d49=>{const _0x2c0ead=_0x5d06d1;if(_0x1e7d49===','||_0x1e7d49==='、'||_0x1e7d49[_0x2c0ead(0x25b)]('\x0a')||_0x1e7d49[_0x2c0ead(0x25b)]('\x0d'))return _0x2c0ead(0x136)+_0x1e7d49+_0x2c0ead(0x2e6);const _0xc896b0=_0x1e7d49[_0x2c0ead(0x16f)]();if(!_0xc896b0)return'';const _0x57a80d=cleanTag(_0xc896b0);if(!_0x57a80d)return'<span\x20class=\x22text-slate-400\x20select-all\x22>'+_0x1e7d49+_0x2c0ead(0x2e6);const _0x1a4ae4=isMobileUI?_0x2c0ead(0x221):_0x2c0ead(0x30b),_0x2aab3e=t(_0x2c0ead(0x2f8)+_0x57a80d+_0x2c0ead(0xfb),_0x2c0ead(0x29d)+_0x57a80d+'\x22');return'<span\x20onclick=\x22searchFromDetailTag(\x27'+escapeQuotes(_0x57a80d)+_0x2c0ead(0x185)+_0x1a4ae4+'\x20bg-slate-800\x20hover:bg-indigo-600\x20text-slate-200\x20hover:text-white\x20cursor-pointer\x20transition\x20select-none\x20border\x20border-slate-700\x20hover:border-indigo-400\x20shadow-sm\x22\x20title=\x22'+_0x2aab3e+'\x22>'+_0x57a80d+_0x2c0ead(0x2e6);})[_0x5d06d1(0x189)]('');}window[_0x52d41e(0x2d1)]=function(_0x323df4){const _0x5afad8=_0x52d41e;document[_0x5afad8(0x120)](_0x5afad8(0x20d))[_0x5afad8(0xdf)][_0x5afad8(0x13d)](_0x5afad8(0x261)),activeModalObjUrl&&(URL[_0x5afad8(0x144)](activeModalObjUrl),activeModalObjUrl=null),activeExactPromptMatch=null,document[_0x5afad8(0x120)](_0x5afad8(0x169))[_0x5afad8(0x162)]=_0x323df4,selectedTags[_0x5afad8(0x308)](),updateSelectedTagsPanel(),selectedCharTags[_0x5afad8(0x308)](),updateSelectedCharTagsPanel(),switchView(_0x5afad8(0x329)),applyFilterAndRender();};let activeModalObjUrl=null;window['openDetailModalById']=async function(_0x397810){const _0x59602a=_0x52d41e;activeModalIndex=filteredIds[_0x59602a(0x2a1)](_0x397810);const _0x63d8b3=await db[_0x59602a(0x26d)][_0x59602a(0x317)](_0x397810),_0x502753=await db[_0x59602a(0x2a8)]['get'](_0x397810);if(!_0x63d8b3)return;if(activeModalObjUrl)URL[_0x59602a(0x144)](activeModalObjUrl);const _0x3ff487=_0x502753&&_0x502753[_0x59602a(0x1b3)]?_0x502753[_0x59602a(0x1b3)]:_0x63d8b3[_0x59602a(0x22e)];activeModalObjUrl=URL[_0x59602a(0x143)](_0x3ff487);const _0x3f1478=formatDateOnly(_0x63d8b3[_0x59602a(0x2c3)]);document[_0x59602a(0x120)]('modalTitle')[_0x59602a(0x1b5)]=_0x63d8b3[_0x59602a(0x295)]||'No\x20Name',document[_0x59602a(0x120)](_0x59602a(0x1b9))[_0x59602a(0x1e6)]=activeModalObjUrl,document[_0x59602a(0x120)](_0x59602a(0x1b9))['onclick']=()=>window['openFullLightbox'](_0x63d8b3['id']),document[_0x59602a(0x120)](_0x59602a(0x183))['innerText']=formatDateTime(_0x63d8b3[_0x59602a(0x2c3)]),document['getElementById'](_0x59602a(0x183))[_0x59602a(0x2a3)]=()=>window[_0x59602a(0xee)](_0x3f1478),document[_0x59602a(0x120)](_0x59602a(0x22f))['innerText']=_0x63d8b3[_0x59602a(0x118)]||'-',document[_0x59602a(0x120)]('modalPrompt')['innerHTML']=renderClickableTags(_0x63d8b3[_0x59602a(0x31b)]),document['getElementById'](_0x59602a(0x1a4))[_0x59602a(0x1b5)]=_0x63d8b3['uc']||t(_0x59602a(0x2c2),'(No\x20UC)'),document['getElementById'](_0x59602a(0x184))[_0x59602a(0x2a3)]=()=>window[_0x59602a(0xee)](_0x3f1478),document['getElementById'](_0x59602a(0x2c6))[_0x59602a(0x2a3)]=()=>{const _0x3c3e59=_0x59602a;if(!_0x63d8b3[_0x3c3e59(0x31b)])return;document[_0x3c3e59(0x120)](_0x3c3e59(0x20d))['classList'][_0x3c3e59(0x13d)](_0x3c3e59(0x261)),activeModalObjUrl&&(URL['revokeObjectURL'](activeModalObjUrl),activeModalObjUrl=null),activeExactPromptMatch=_0x63d8b3['prompt'],document['getElementById']('searchInput')[_0x3c3e59(0x162)]='\x22'+_0x63d8b3[_0x3c3e59(0x31b)][_0x3c3e59(0x28c)](/[\r\n]+/g,'\x20')[_0x3c3e59(0x16f)]()+'\x22',selectedTags[_0x3c3e59(0x308)](),updateSelectedTagsPanel(),selectedCharTags[_0x3c3e59(0x308)](),updateSelectedCharTagsPanel(),switchView(_0x3c3e59(0x329)),applyFilterAndRender();},document[_0x59602a(0x120)](_0x59602a(0x30f))[_0x59602a(0x2a3)]=()=>window[_0x59602a(0x222)](_0x63d8b3[_0x59602a(0x118)]),document[_0x59602a(0x120)]('btnCopyPrompt')[_0x59602a(0x2a3)]=()=>window[_0x59602a(0x222)](_0x63d8b3['prompt']),document[_0x59602a(0x120)](_0x59602a(0x15e))['onclick']=()=>window['copyText'](_0x63d8b3['uc']),document['getElementById']('modalEditBtn')[_0x59602a(0x2a3)]=()=>{const _0x199662=_0x59602a;document[_0x199662(0x120)](_0x199662(0x20d))[_0x199662(0xdf)][_0x199662(0x13d)](_0x199662(0x261)),window['openEditModal'](_0x63d8b3['id']);},document['getElementById']('modalDeleteBtn')[_0x59602a(0x2a3)]=()=>{const _0x91d909=_0x59602a;window[_0x91d909(0x206)](_0x63d8b3['id'],()=>document['getElementById']('detailModal')[_0x91d909(0xdf)][_0x91d909(0x13d)](_0x91d909(0x261)));};const _0x4bf8fc=document[_0x59602a(0x120)](_0x59602a(0x115)),_0x2beedf=document['getElementById'](_0x59602a(0x1c0));_0x63d8b3['characters']&&_0x63d8b3[_0x59602a(0x19b)][_0x59602a(0x2e2)]>0x0?(_0x2beedf['innerText']=t(_0x63d8b3[_0x59602a(0x19b)][_0x59602a(0x2e2)]+_0x59602a(0x21f),_0x63d8b3[_0x59602a(0x19b)][_0x59602a(0x2e2)]+_0x59602a(0x154)),_0x4bf8fc[_0x59602a(0x296)]=_0x63d8b3['characters'][_0x59602a(0x302)]((_0x1ce911,_0x2c5803)=>_0x59602a(0x242)+t('枠\x20'+(_0x2c5803+0x1),_0x59602a(0x322)+(_0x2c5803+0x1))+':\x20'+(_0x1ce911[_0x59602a(0x2d5)]||t(_0x59602a(0x2cb),_0x59602a(0x2e8)))+'</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22flex\x20gap-2\x20text-[10px]\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20onclick=\x22copyText(\x27'+escapeQuotes(_0x1ce911[_0x59602a(0x31b)])+'\x27)\x22\x20class=\x22text-indigo-400\x20hover:underline\x22>'+t(_0x59602a(0x288),_0x59602a(0x2c4))+'</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20'+(_0x1ce911['uc']?_0x59602a(0x237)+escapeQuotes(_0x1ce911['uc'])+_0x59602a(0x161)+t(_0x59602a(0x2bd),'Copy\x20UC')+'</button>':'')+_0x59602a(0x1dc)+renderClickableTags(_0x1ce911[_0x59602a(0x31b)])+_0x59602a(0x21b)+(_0x1ce911['uc']?_0x59602a(0x26b)+t('除外','UC')+':\x20'+_0x1ce911['uc']+_0x59602a(0x1d7):'')+'\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20')['join']('')):(_0x2beedf[_0x59602a(0x1b5)]=t('0枠',_0x59602a(0x2ab)),_0x4bf8fc[_0x59602a(0x296)]=_0x59602a(0x30a)+t(_0x59602a(0xea),_0x59602a(0x31c))+_0x59602a(0x2e6)),document[_0x59602a(0x120)](_0x59602a(0x20d))['classList'][_0x59602a(0x114)](_0x59602a(0x261)),lucide['createIcons']();},document[_0x52d41e(0x120)](_0x52d41e(0x195))[_0x52d41e(0x2a3)]=()=>{if(activeModalIndex>0x0)window['openDetailModalById'](filteredIds[activeModalIndex-0x1]);},document[_0x52d41e(0x120)](_0x52d41e(0x266))[_0x52d41e(0x2a3)]=()=>{const _0x215df2=_0x52d41e;if(activeModalIndex<filteredIds[_0x215df2(0x2e2)]-0x1)window[_0x215df2(0x10d)](filteredIds[activeModalIndex+0x1]);},document[_0x52d41e(0x120)](_0x52d41e(0x247))[_0x52d41e(0x2a3)]=()=>{const _0x3a22f3=_0x52d41e;document[_0x3a22f3(0x120)](_0x3a22f3(0x20d))[_0x3a22f3(0xdf)][_0x3a22f3(0x13d)](_0x3a22f3(0x261)),activeModalObjUrl&&(URL[_0x3a22f3(0x144)](activeModalObjUrl),activeModalObjUrl=null);},window[_0x52d41e(0xfd)]=async function(_0x3a1511){const _0x12471e=_0x52d41e,_0x218e02=await db[_0x12471e(0x26d)][_0x12471e(0x317)](_0x3a1511);if(!_0x218e02)return;document[_0x12471e(0x120)]('editItemId')[_0x12471e(0x162)]=_0x218e02['id'],document[_0x12471e(0x120)](_0x12471e(0x2df))[_0x12471e(0x162)]=_0x218e02['seed']||'',document[_0x12471e(0x120)](_0x12471e(0x133))[_0x12471e(0x162)]=_0x218e02[_0x12471e(0x31b)]||'',document['getElementById'](_0x12471e(0x245))[_0x12471e(0x162)]=_0x218e02['uc']||'';const _0x322269=document[_0x12471e(0x120)](_0x12471e(0x214));_0x322269[_0x12471e(0x296)]='',(_0x218e02[_0x12471e(0x19b)]||[])[_0x12471e(0x298)](_0xaf3741=>addCharSlotToEditForm(_0xaf3741[_0x12471e(0x2d5)],_0xaf3741[_0x12471e(0x31b)],_0xaf3741['uc'])),document[_0x12471e(0x120)](_0x12471e(0x2b2))[_0x12471e(0xdf)][_0x12471e(0x114)](_0x12471e(0x261)),lucide[_0x12471e(0xf3)]();};function addCharSlotToEditForm(_0x3d4033='',_0x1ce301='',_0x4b07a8=''){const _0x462a39=_0x52d41e,_0xa9dd2a=document[_0x462a39(0x120)](_0x462a39(0x214)),_0x4703f5=document['createElement'](_0x462a39(0x119));_0x4703f5[_0x462a39(0x210)]='p-2.5\x20bg-slate-950\x20border\x20border-slate-800\x20rounded\x20space-y-2\x20relative\x20char-slot',_0x4703f5[_0x462a39(0x296)]=_0x462a39(0x1e3)+t(_0x462a39(0x2d3),_0x462a39(0x202))+_0x462a39(0x104)+(_0x3d4033||t(_0x462a39(0x2cb),_0x462a39(0x2e8)))+_0x462a39(0x157)+t(_0x462a39(0x240),_0x462a39(0x198))+_0x462a39(0x150)+t(_0x462a39(0x303),_0x462a39(0x248))+_0x462a39(0x170)+_0x1ce301+_0x462a39(0x177)+t('キャラクター個別除外プロンプト\x20(UC)',_0x462a39(0xe8))+_0x462a39(0xe6)+_0x4b07a8+_0x462a39(0x30d),_0xa9dd2a[_0x462a39(0x17b)](_0x4703f5);}document[_0x52d41e(0x120)](_0x52d41e(0xf8))[_0x52d41e(0x2a3)]=()=>addCharSlotToEditForm(),document[_0x52d41e(0x120)](_0x52d41e(0x168))[_0x52d41e(0x2a3)]=async()=>{const _0x47ef5b=_0x52d41e,_0x53ba94=parseInt(document[_0x47ef5b(0x120)](_0x47ef5b(0x1f9))['value']),_0x5a2677=document[_0x47ef5b(0x120)](_0x47ef5b(0x2df))[_0x47ef5b(0x162)][_0x47ef5b(0x16f)](),_0x131232=document[_0x47ef5b(0x120)](_0x47ef5b(0x133))[_0x47ef5b(0x162)],_0x5051b2=document[_0x47ef5b(0x120)](_0x47ef5b(0x245))[_0x47ef5b(0x162)],_0x44dd66=document[_0x47ef5b(0x1bc)](_0x47ef5b(0x272)),_0x4e1fb7=Array[_0x47ef5b(0x223)](_0x44dd66)['map'](_0x496de1=>({'name':_0x496de1[_0x47ef5b(0x146)](_0x47ef5b(0x321))[_0x47ef5b(0x162)][_0x47ef5b(0x16f)]()||t(_0x47ef5b(0x2cb),_0x47ef5b(0x2e8)),'prompt':_0x496de1[_0x47ef5b(0x146)](_0x47ef5b(0x2e7))[_0x47ef5b(0x162)],'uc':_0x496de1['querySelector'](_0x47ef5b(0x325))[_0x47ef5b(0x162)]}))[_0x47ef5b(0x178)](_0x1b97ca=>_0x1b97ca[_0x47ef5b(0x31b)]||_0x1b97ca['uc']);await db[_0x47ef5b(0x26d)][_0x47ef5b(0x2b6)](_0x53ba94,{'seed':_0x5a2677,'prompt':_0x131232,'uc':_0x5051b2,'characters':_0x4e1fb7});const _0x3ffb75=await db[_0x47ef5b(0x26d)][_0x47ef5b(0x317)](_0x53ba94);if(_0x3ffb75){const _0x94d463=lightMetaList[_0x47ef5b(0x23d)](_0x18f7ac=>_0x18f7ac['id']===_0x53ba94);if(_0x94d463!==-0x1)lightMetaList[_0x94d463]=createLightMetaItem(_0x3ffb75);}document['getElementById'](_0x47ef5b(0x2b2))[_0x47ef5b(0xdf)][_0x47ef5b(0x13d)](_0x47ef5b(0x261)),refreshAllViewsAfterDataChange(),alert(t(_0x47ef5b(0x21d),_0x47ef5b(0x20e)));},document['getElementById']('editModalCloseBtn')[_0x52d41e(0x2a3)]=()=>document[_0x52d41e(0x120)]('editModal')[_0x52d41e(0xdf)][_0x52d41e(0x13d)](_0x52d41e(0x261)),document[_0x52d41e(0x120)](_0x52d41e(0x160))[_0x52d41e(0x2a3)]=()=>document['getElementById'](_0x52d41e(0x2b2))[_0x52d41e(0xdf)][_0x52d41e(0x13d)](_0x52d41e(0x261));let activeLightboxUrl=null;window[_0x52d41e(0x1ef)]=async function(_0x5daeaf){const _0x53de9a=_0x52d41e,_0x1b36a2=await db[_0x53de9a(0x2a8)][_0x53de9a(0x317)](_0x5daeaf),_0x52a161=await db['metadata'][_0x53de9a(0x317)](_0x5daeaf),_0x39a95b=_0x1b36a2&&_0x1b36a2['blob']?_0x1b36a2[_0x53de9a(0x1b3)]:_0x52a161?_0x52a161[_0x53de9a(0x22e)]:null;if(!_0x39a95b)return;if(activeLightboxUrl)URL[_0x53de9a(0x144)](activeLightboxUrl);activeLightboxUrl=URL[_0x53de9a(0x143)](_0x39a95b),document['getElementById'](_0x53de9a(0x254))[_0x53de9a(0x1e6)]=activeLightboxUrl,document['getElementById']('lightboxModal')[_0x53de9a(0xdf)]['remove'](_0x53de9a(0x261));},document[_0x52d41e(0x120)](_0x52d41e(0x23c))[_0x52d41e(0x2a3)]=()=>{const _0x56658e=_0x52d41e;document[_0x56658e(0x120)](_0x56658e(0x23c))[_0x56658e(0xdf)][_0x56658e(0x13d)]('hidden'),activeLightboxUrl&&(URL['revokeObjectURL'](activeLightboxUrl),activeLightboxUrl=null);},window[_0x52d41e(0x206)]=async function(_0x302190,_0x1407a4){const _0x5177cf=_0x52d41e;if(!confirm(t(_0x5177cf(0x25c),'Delete\x20this\x20item?')))return;await db[_0x5177cf(0x26d)]['delete'](_0x302190),await db[_0x5177cf(0x2a8)][_0x5177cf(0x2ec)](_0x302190),lightMetaList=lightMetaList['filter'](_0x23ec96=>_0x23ec96['id']!==_0x302190);if(_0x1407a4)_0x1407a4();refreshAllViewsAfterDataChange();},document[_0x52d41e(0x120)]('btnClearAllDB')[_0x52d41e(0x2a3)]=async()=>{const _0x205252=_0x52d41e,_0x1e338e=await db[_0x205252(0x26d)][_0x205252(0x292)]();if(_0x1e338e===0x0)return alert(t('登録データがありません。',_0x205252(0x22d)));if(!confirm(t('全\x20'+_0x1e338e+_0x205252(0x141),'Are\x20you\x20sure\x20you\x20want\x20to\x20delete\x20all\x20'+_0x1e338e+'\x20items?')))return;await db[_0x205252(0x26d)][_0x205252(0x308)](),await db[_0x205252(0x2a8)][_0x205252(0x308)](),lightMetaList=[],refreshAllViewsAfterDataChange(),alert(t(_0x205252(0x12d),_0x205252(0x26e)));};function renderTagsCloud(_0xd66cb8=''){const _0x259707=_0x52d41e,_0x454885=document[_0x259707(0x120)](_0x259707(0x2d7)),_0x48607d=getContextualTagStats(),_0x39a70b=Array[_0x259707(0x223)](_0x48607d['entries']())[_0x259707(0x178)](([_0x109282,_0x483ad2])=>_0x483ad2>0x0);_0x39a70b['sort']((_0x47a27e,_0x138679)=>_0x138679[0x1]-_0x47a27e[0x1]);const _0x2277b7=_0xd66cb8?_0x39a70b[_0x259707(0x178)](([_0x394d93])=>_0x394d93[_0x259707(0x25b)](_0xd66cb8[_0x259707(0x1e8)]())):_0x39a70b;if(_0x2277b7[_0x259707(0x2e2)]===0x0){_0x454885[_0x259707(0x296)]='<span\x20class=\x22text-slate-500\x20text-sm\x20py-4\x22>'+t(_0x259707(0x109),_0x259707(0x12b))+'</span>';return;}_0x454885[_0x259707(0x296)]=_0x2277b7[_0x259707(0x302)](([_0x28a1b2,_0x13777f])=>{const _0x4813bb=_0x259707,_0x58f132=selectedTags['has'](_0x28a1b2),_0x1f56bb=_0x58f132?_0x4813bb(0x182):'bg-slate-800/90\x20hover:bg-slate-700\x20border-slate-700\x20text-slate-200\x20hover:text-white';return _0x4813bb(0x14f)+escapeQuotes(_0x28a1b2)+'\x27)\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20class=\x22group\x20px-3.5\x20py-2\x20rounded-lg\x20border\x20flex\x20items-center\x20gap-2.5\x20text-xs\x20sm:text-sm\x20transition\x20select-none\x20shadow-sm\x20'+_0x1f56bb+_0x4813bb(0x11e)+(_0x58f132?_0x4813bb(0x1fa):_0x4813bb(0x20f))+'\x22>✓</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22font-mono\x20text-left\x20font-medium\x20tracking-tight\x20break-all\x22>'+_0x28a1b2+'</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22px-2\x20py-0.5\x20rounded\x20text-xs\x20font-mono\x20font-semibold\x20shrink-0\x20'+(_0x58f132?'bg-indigo-800\x20text-indigo-100':'bg-slate-950\x20text-indigo-300')+'\x22>'+_0x13777f+_0x4813bb(0xfa);})[_0x259707(0x189)]('');}window['toggleTagSelection']=function(_0x2c3be1){const _0xca0572=_0x52d41e;if(selectedTags[_0xca0572(0xff)](_0x2c3be1))selectedTags[_0xca0572(0x2ec)](_0x2c3be1);else selectedTags[_0xca0572(0x13d)](_0x2c3be1);renderTagsCloud(document[_0xca0572(0x120)](_0xca0572(0x1b8))['value'][_0xca0572(0x16f)]()),updateSelectedTagsPanel();};function updateSelectedTagsPanel(){const _0x2a2c87=_0x52d41e,_0x375fb6=document[_0x2a2c87(0x120)]('selectedTagsList'),_0x532a55=document['getElementById'](_0x2a2c87(0x1aa)),_0x30ef27=document[_0x2a2c87(0x120)](_0x2a2c87(0x287)),_0x35f970=document[_0x2a2c87(0x120)](_0x2a2c87(0x10e));if(selectedTags['size']===0x0){const _0x3aaaf1='選択中のタグはありません。下のタグを'+(isMobileUI?_0x2a2c87(0x1ce):'クリック')+_0x2a2c87(0x2b7),_0xf2a700=_0x2a2c87(0x1fd)+(isMobileUI?_0x2a2c87(0x1a3):_0x2a2c87(0x11f))+_0x2a2c87(0x1b4);_0x375fb6[_0x2a2c87(0x296)]=_0x2a2c87(0x1b6)+t(_0x3aaaf1,_0xf2a700)+'</span>',_0x532a55[_0x2a2c87(0xdf)][_0x2a2c87(0x13d)](_0x2a2c87(0x261)),_0x30ef27[_0x2a2c87(0xdf)][_0x2a2c87(0x13d)](_0x2a2c87(0x261));return;}_0x532a55[_0x2a2c87(0xdf)][_0x2a2c87(0x114)](_0x2a2c87(0x261)),_0x30ef27[_0x2a2c87(0xdf)][_0x2a2c87(0x114)]('hidden'),_0x35f970[_0x2a2c87(0x1b5)]=t(_0x2a2c87(0x229)+selectedTags[_0x2a2c87(0x311)]+'\x20個のタグでAND検索',_0x2a2c87(0xd9)+selectedTags['size']+_0x2a2c87(0x2b8)),_0x375fb6['innerHTML']=Array['from'](selectedTags)['map'](_0x3f1259=>_0x2a2c87(0x2de)+_0x3f1259+'</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<button\x20type=\x22button\x22\x20onclick=\x22toggleTagSelection(\x27'+escapeQuotes(_0x3f1259)+_0x2a2c87(0x14a))[_0x2a2c87(0x189)](''),lucide[_0x2a2c87(0xf3)]();}document['getElementById'](_0x52d41e(0x1aa))[_0x52d41e(0x2a3)]=()=>{const _0xabdb34=_0x52d41e;selectedTags['clear'](),renderTagsCloud(document[_0xabdb34(0x120)]('tagFilterInput')[_0xabdb34(0x162)][_0xabdb34(0x16f)]()),updateSelectedTagsPanel();},document[_0x52d41e(0x120)](_0x52d41e(0x287))[_0x52d41e(0x2a3)]=()=>{const _0x51e425=_0x52d41e;if(selectedTags[_0x51e425(0x311)]===0x0)return;activeExactPromptMatch=null,document[_0x51e425(0x120)](_0x51e425(0x169))[_0x51e425(0x162)]=Array[_0x51e425(0x223)](selectedTags)[_0x51e425(0x189)](',\x20'),switchView(_0x51e425(0x329)),applyFilterAndRender();},document[_0x52d41e(0x120)](_0x52d41e(0x1b8))['addEventListener'](_0x52d41e(0x159),_0x3f3336=>renderTagsCloud(_0x3f3336[_0x52d41e(0x2fb)][_0x52d41e(0x162)][_0x52d41e(0x16f)]()));function renderCharTagsCloud(_0x17093f=''){const _0x1e3845=_0x52d41e,_0x4708ed=document[_0x1e3845(0x120)]('charTagCloudContainer'),_0x7f32e8=getContextualCharTagStats(),_0xcbfb9a=Array[_0x1e3845(0x223)](_0x7f32e8[_0x1e3845(0x331)]())[_0x1e3845(0x178)](([_0x388116,_0x379045])=>_0x379045>0x0);_0xcbfb9a['sort']((_0x46cf23,_0x106475)=>_0x106475[0x1]-_0x46cf23[0x1]);const _0x310b39=_0x17093f?_0xcbfb9a[_0x1e3845(0x178)](([_0xa6e165])=>_0xa6e165[_0x1e3845(0x25b)](_0x17093f[_0x1e3845(0x1e8)]())):_0xcbfb9a;if(_0x310b39[_0x1e3845(0x2e2)]===0x0){_0x4708ed[_0x1e3845(0x296)]=_0x1e3845(0x29e)+t('該当するキャラクタータグがありません。',_0x1e3845(0x197))+_0x1e3845(0x2e6);return;}_0x4708ed['innerHTML']=_0x310b39[_0x1e3845(0x302)](([_0x5875d6,_0x38d895])=>{const _0x231bcb=_0x1e3845,_0x242201=selectedCharTags[_0x231bcb(0xff)](_0x5875d6),_0x1fd712=_0x242201?_0x231bcb(0x182):'bg-slate-800/90\x20hover:bg-slate-700\x20border-slate-700\x20text-slate-200\x20hover:text-white';return _0x231bcb(0x16b)+escapeQuotes(_0x5875d6)+'\x27)\x22\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20class=\x22group\x20px-3.5\x20py-2\x20rounded-lg\x20border\x20flex\x20items-center\x20gap-2.5\x20text-xs\x20sm:text-sm\x20transition\x20select-none\x20shadow-sm\x20'+_0x1fd712+_0x231bcb(0x11e)+(_0x242201?_0x231bcb(0x1fa):_0x231bcb(0x20f))+'\x22>✓</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22font-mono\x20text-left\x20font-medium\x20tracking-tight\x20break-all\x22>'+_0x5875d6+'</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22px-2\x20py-0.5\x20rounded\x20text-xs\x20font-mono\x20font-semibold\x20shrink-0\x20'+(_0x242201?_0x231bcb(0xed):_0x231bcb(0xfe))+'\x22>'+_0x38d895+'</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20</button>\x0a\x20\x20\x20\x20\x20\x20\x20\x20';})['join']('');}window[_0x52d41e(0x1a0)]=function(_0x6a1e23){const _0xde4168=_0x52d41e;if(selectedCharTags[_0xde4168(0xff)](_0x6a1e23))selectedCharTags[_0xde4168(0x2ec)](_0x6a1e23);else selectedCharTags[_0xde4168(0x13d)](_0x6a1e23);renderCharTagsCloud(document['getElementById']('charTagFilterInput')[_0xde4168(0x162)]['trim']()),updateSelectedCharTagsPanel();};function updateSelectedCharTagsPanel(){const _0x77f6d9=_0x52d41e,_0x5d3f9f=document['getElementById'](_0x77f6d9(0x1da)),_0x3013f7=document[_0x77f6d9(0x120)](_0x77f6d9(0x205)),_0x5189df=document['getElementById'](_0x77f6d9(0x307)),_0x344f41=document[_0x77f6d9(0x120)](_0x77f6d9(0x32a));if(selectedCharTags[_0x77f6d9(0x311)]===0x0){const _0x54a316=_0x77f6d9(0x173)+(isMobileUI?'タップ':_0x77f6d9(0x2c8))+'して選択してください。',_0xf03527=_0x77f6d9(0x1c7)+(isMobileUI?'Tap':_0x77f6d9(0x11f))+'\x20tags\x20below\x20to\x20select.';_0x5d3f9f['innerHTML']=_0x77f6d9(0x1b6)+t(_0x54a316,_0xf03527)+_0x77f6d9(0x2e6),_0x3013f7[_0x77f6d9(0xdf)][_0x77f6d9(0x13d)]('hidden'),_0x5189df['classList'][_0x77f6d9(0x13d)](_0x77f6d9(0x261));return;}_0x3013f7[_0x77f6d9(0xdf)]['remove'](_0x77f6d9(0x261)),_0x5189df['classList']['remove'](_0x77f6d9(0x261)),_0x344f41[_0x77f6d9(0x1b5)]=t(_0x77f6d9(0x229)+selectedCharTags['size']+_0x77f6d9(0x199),_0x77f6d9(0xd9)+selectedCharTags[_0x77f6d9(0x311)]+'\x20selected\x20char\x20tag(s)\x20(AND)'),_0x5d3f9f[_0x77f6d9(0x296)]=Array[_0x77f6d9(0x223)](selectedCharTags)[_0x77f6d9(0x302)](_0xcfd862=>_0x77f6d9(0x2de)+_0xcfd862+_0x77f6d9(0x2ba)+escapeQuotes(_0xcfd862)+_0x77f6d9(0x14a))[_0x77f6d9(0x189)](''),lucide['createIcons']();}document[_0x52d41e(0x120)](_0x52d41e(0x205))[_0x52d41e(0x2a3)]=()=>{const _0x3c5be0=_0x52d41e;selectedCharTags[_0x3c5be0(0x308)](),renderCharTagsCloud(document[_0x3c5be0(0x120)](_0x3c5be0(0x246))[_0x3c5be0(0x162)][_0x3c5be0(0x16f)]()),updateSelectedCharTagsPanel();},document[_0x52d41e(0x120)](_0x52d41e(0x307))[_0x52d41e(0x2a3)]=()=>{const _0x5c0a47=_0x52d41e;if(selectedCharTags['size']===0x0)return;activeExactPromptMatch=null,document[_0x5c0a47(0x120)](_0x5c0a47(0x169))['value']=Array[_0x5c0a47(0x223)](selectedCharTags)[_0x5c0a47(0x189)](',\x20'),switchView(_0x5c0a47(0x329)),applyFilterAndRender();},document[_0x52d41e(0x120)]('charTagFilterInput')[_0x52d41e(0x179)](_0x52d41e(0x159),_0x10e30e=>renderCharTagsCloud(_0x10e30e[_0x52d41e(0x2fb)]['value'][_0x52d41e(0x16f)]()));function switchView(_0x5e7b8c,_0x32be4c=!![]){const _0x2ca478=_0x52d41e;currentView=_0x5e7b8c;const _0x1428d4=_0x5e7b8c===_0x2ca478(0x131)||_0x5e7b8c===_0x2ca478(0x2f3);document[_0x2ca478(0x120)](_0x2ca478(0xf4))[_0x2ca478(0xdf)][_0x2ca478(0x209)](_0x2ca478(0x261),_0x5e7b8c!==_0x2ca478(0x329)),document[_0x2ca478(0x120)](_0x2ca478(0x1af))[_0x2ca478(0xdf)][_0x2ca478(0x209)](_0x2ca478(0x261),_0x5e7b8c!=='matrix'),document['getElementById']('tagsView')[_0x2ca478(0xdf)]['toggle'](_0x2ca478(0x261),_0x5e7b8c!==_0x2ca478(0x131)),document[_0x2ca478(0x120)](_0x2ca478(0x163))[_0x2ca478(0xdf)][_0x2ca478(0x209)]('hidden',_0x5e7b8c!=='charTags'),document[_0x2ca478(0x120)]('paginationBar')[_0x2ca478(0xdf)]['toggle'](_0x2ca478(0x261),_0x1428d4),document['getElementById'](_0x2ca478(0x108))[_0x2ca478(0xdf)][_0x2ca478(0x209)](_0x2ca478(0x261),_0x1428d4||filteredIds['length']===0x0);const _0x5b8410=isMobileUI?'py-1.5\x20text-[11px]\x20sm:text-xs\x20rounded-md\x20font-medium\x20bg-indigo-600\x20text-white\x20flex\x20items-center\x20justify-center\x20gap-1\x20transition':_0x2ca478(0x2cd),_0xd086ab=isMobileUI?_0x2ca478(0x319):_0x2ca478(0x137);document[_0x2ca478(0x120)]('btnViewGallery')[_0x2ca478(0x210)]=_0x5e7b8c==='gallery'?_0x5b8410:_0xd086ab,document[_0x2ca478(0x120)](_0x2ca478(0x1d1))['className']=_0x5e7b8c===_0x2ca478(0x23f)?_0x5b8410:_0xd086ab,document[_0x2ca478(0x120)](_0x2ca478(0x1b0))[_0x2ca478(0x210)]=_0x5e7b8c===_0x2ca478(0x131)?_0x5b8410:_0xd086ab,document['getElementById'](_0x2ca478(0x263))['className']=_0x5e7b8c===_0x2ca478(0x2f3)?_0x5b8410:_0xd086ab;if(_0x5e7b8c===_0x2ca478(0x131))renderTagsCloud(document['getElementById'](_0x2ca478(0x1b8))[_0x2ca478(0x162)]['trim']());else{if(_0x5e7b8c===_0x2ca478(0x2f3))renderCharTagsCloud(document[_0x2ca478(0x120)]('charTagFilterInput')[_0x2ca478(0x162)]['trim']());}if(_0x32be4c)scrollToTop();}document[_0x52d41e(0x120)](_0x52d41e(0x2f1))[_0x52d41e(0x2a3)]=()=>{const _0x489a01=_0x52d41e;window['trackEvent']('switch_view',{'view':'gallery'}),switchView(_0x489a01(0x329));},document[_0x52d41e(0x120)](_0x52d41e(0x1d1))[_0x52d41e(0x2a3)]=()=>{const _0x39c0e5=_0x52d41e;window[_0x39c0e5(0x2ae)](_0x39c0e5(0x15b),{'view':_0x39c0e5(0x23f)}),switchView(_0x39c0e5(0x23f));},document[_0x52d41e(0x120)](_0x52d41e(0x1b0))[_0x52d41e(0x2a3)]=()=>{const _0x69b30b=_0x52d41e;window[_0x69b30b(0x2ae)](_0x69b30b(0x15b),{'view':'tags'}),switchView(_0x69b30b(0x131));},document['getElementById']('btnViewCharTags')[_0x52d41e(0x2a3)]=()=>{const _0x61ed6f=_0x52d41e;window['trackEvent'](_0x61ed6f(0x15b),{'view':'charTags'}),switchView(_0x61ed6f(0x2f3));},document[_0x52d41e(0x120)]('brandLogoBtn')['onclick']=()=>{const _0x4294d9=_0x52d41e;activeExactPromptMatch=null,document['getElementById'](_0x4294d9(0x169))['value']='',document[_0x4294d9(0x120)](_0x4294d9(0x2ed))['value']='',document[_0x4294d9(0x120)]('dateToInput')[_0x4294d9(0x162)]='',selectedTags[_0x4294d9(0x308)](),updateSelectedTagsPanel(),selectedCharTags['clear'](),updateSelectedCharTagsPanel(),switchView('gallery'),applyFilterAndRender();},document['getElementById']('searchInput')[_0x52d41e(0x179)](_0x52d41e(0x159),()=>{activeExactPromptMatch=null,applyFilterAndRender();}),document['getElementById'](_0x52d41e(0x17e))[_0x52d41e(0x2a3)]=()=>{const _0x1f6d20=_0x52d41e;activeExactPromptMatch=null,document[_0x1f6d20(0x120)]('searchInput')[_0x1f6d20(0x162)]='',applyFilterAndRender();};function buildZeroCopyZipBlob(_0x34b9ce){const _0x2efe65=_0x52d41e,_0x4d96c0=new TextEncoder(),_0x3a3467=[],_0x170d6d=[];let _0x4664b2=0x0,_0x4a95f8=0x0;for(let _0x5e2090=0x0;_0x5e2090<_0x34b9ce['length'];_0x5e2090++){const _0x23b445=_0x34b9ce[_0x5e2090],_0x1e5fe6=_0x4d96c0[_0x2efe65(0xfc)](_0x23b445['path']),_0x308749=_0x23b445[_0x2efe65(0x1b3)][_0x2efe65(0x311)]>>>0x0,_0x26edef=_0x4664b2>>>0x0,_0x27a758=new Uint8Array(0x1e+_0x1e5fe6['length']),_0x3e6f4e=new DataView(_0x27a758[_0x2efe65(0x212)]);_0x3e6f4e[_0x2efe65(0x2e3)](0x0,0x4034b50,!![]),_0x3e6f4e[_0x2efe65(0x2f9)](0x4,0x14,!![]),_0x3e6f4e[_0x2efe65(0x2f9)](0x6,0x800,!![]),_0x3e6f4e[_0x2efe65(0x2f9)](0x8,0x0,!![]),_0x3e6f4e[_0x2efe65(0x2f9)](0xa,0x0,!![]),_0x3e6f4e[_0x2efe65(0x2f9)](0xc,0x0,!![]),_0x3e6f4e[_0x2efe65(0x2e3)](0xe,0x0,!![]),_0x3e6f4e['setUint32'](0x12,_0x308749,!![]),_0x3e6f4e[_0x2efe65(0x2e3)](0x16,_0x308749,!![]),_0x3e6f4e[_0x2efe65(0x2f9)](0x1a,_0x1e5fe6[_0x2efe65(0x2e2)],!![]),_0x3e6f4e['setUint16'](0x1c,0x0,!![]),_0x27a758['set'](_0x1e5fe6,0x1e),_0x3a3467[_0x2efe65(0x286)](_0x27a758,_0x23b445[_0x2efe65(0x1b3)]),_0x4664b2+=_0x27a758['byteLength']+_0x308749;const _0x3e863d=new Uint8Array(0x2e+_0x1e5fe6[_0x2efe65(0x2e2)]),_0x56683f=new DataView(_0x3e863d[_0x2efe65(0x212)]);_0x56683f['setUint32'](0x0,0x2014b50,!![]),_0x56683f[_0x2efe65(0x2f9)](0x4,0x14,!![]),_0x56683f[_0x2efe65(0x2f9)](0x6,0x14,!![]),_0x56683f[_0x2efe65(0x2f9)](0x8,0x800,!![]),_0x56683f[_0x2efe65(0x2f9)](0xa,0x0,!![]),_0x56683f[_0x2efe65(0x2f9)](0xc,0x0,!![]),_0x56683f[_0x2efe65(0x2f9)](0xe,0x0,!![]),_0x56683f['setUint32'](0x10,0x0,!![]),_0x56683f[_0x2efe65(0x2e3)](0x14,_0x308749,!![]),_0x56683f['setUint32'](0x18,_0x308749,!![]),_0x56683f[_0x2efe65(0x2f9)](0x1c,_0x1e5fe6[_0x2efe65(0x2e2)],!![]),_0x56683f[_0x2efe65(0x2f9)](0x1e,0x0,!![]),_0x56683f[_0x2efe65(0x2f9)](0x20,0x0,!![]),_0x56683f[_0x2efe65(0x2f9)](0x22,0x0,!![]),_0x56683f[_0x2efe65(0x2f9)](0x24,0x0,!![]),_0x56683f['setUint32'](0x26,0x0,!![]),_0x56683f[_0x2efe65(0x2e3)](0x2a,_0x26edef,!![]),_0x3e863d['set'](_0x1e5fe6,0x2e),_0x170d6d[_0x2efe65(0x286)](_0x3e863d),_0x4a95f8+=_0x3e863d['byteLength'];}const _0x4d83aa=_0x4664b2>>>0x0;for(let _0x4f3865=0x0;_0x4f3865<_0x170d6d[_0x2efe65(0x2e2)];_0x4f3865++)_0x3a3467['push'](_0x170d6d[_0x4f3865]);const _0x3e5321=new Uint8Array(0x16),_0x51e531=new DataView(_0x3e5321[_0x2efe65(0x212)]);return _0x51e531[_0x2efe65(0x2e3)](0x0,0x6054b50,!![]),_0x51e531[_0x2efe65(0x2f9)](0x4,0x0,!![]),_0x51e531[_0x2efe65(0x2f9)](0x6,0x0,!![]),_0x51e531[_0x2efe65(0x2f9)](0x8,_0x34b9ce[_0x2efe65(0x2e2)],!![]),_0x51e531[_0x2efe65(0x2f9)](0xa,_0x34b9ce['length'],!![]),_0x51e531['setUint32'](0xc,_0x4a95f8>>>0x0,!![]),_0x51e531[_0x2efe65(0x2e3)](0x10,_0x4d83aa,!![]),_0x51e531[_0x2efe65(0x2f9)](0x14,0x0,!![]),_0x3a3467['push'](_0x3e5321),new Blob(_0x3a3467,{'type':_0x2efe65(0x1cc)});}async function parseZeroCopyStoreZip(_0xed9e03){const _0x4328df=_0x52d41e,_0x345c44=Math[_0x4328df(0x26a)](_0xed9e03[_0x4328df(0x311)],0x10015),_0x301f5a=await _0xed9e03[_0x4328df(0x11b)](_0xed9e03[_0x4328df(0x311)]-_0x345c44,_0xed9e03[_0x4328df(0x311)])[_0x4328df(0x113)](),_0x2c7900=new DataView(_0x301f5a);let _0x514c4c=-0x1;for(let _0xc90196=_0x301f5a[_0x4328df(0x204)]-0x16;_0xc90196>=0x0;_0xc90196--){if(_0x2c7900[_0x4328df(0x16a)](_0xc90196,!![])===0x6054b50){const _0x5d2450=_0x2c7900[_0x4328df(0xf6)](_0xc90196+0x14,!![]);if(_0xc90196+0x16+_0x5d2450===_0x301f5a['byteLength']){_0x514c4c=_0xc90196;break;}}}if(_0x514c4c===-0x1)return null;const _0x4fdc15=_0x2c7900[_0x4328df(0x16a)](_0x514c4c+0xc,!![]),_0x4528f9=_0x2c7900[_0x4328df(0x16a)](_0x514c4c+0x10,!![]);if(_0x4528f9===0xffffffff||_0x4fdc15===0xffffffff)return null;const _0x11422c=await _0xed9e03[_0x4328df(0x11b)](_0x4528f9,_0x4528f9+_0x4fdc15)[_0x4328df(0x113)](),_0x33a8f5=new DataView(_0x11422c),_0x52d317=new TextDecoder(_0x4328df(0x111)),_0x3b77a7=new Map();let _0x3252b8=0x0;while(_0x3252b8+0x2e<=_0x11422c[_0x4328df(0x204)]){if(_0x33a8f5[_0x4328df(0x16a)](_0x3252b8,!![])!==0x2014b50)break;const _0x47a1f9=_0x33a8f5['getUint16'](_0x3252b8+0xa,!![]),_0xbc78f7=_0x33a8f5[_0x4328df(0x16a)](_0x3252b8+0x14,!![]),_0x56dd75=_0x33a8f5[_0x4328df(0xf6)](_0x3252b8+0x1c,!![]),_0x497d42=_0x33a8f5[_0x4328df(0xf6)](_0x3252b8+0x1e,!![]),_0xe07d87=_0x33a8f5['getUint16'](_0x3252b8+0x20,!![]),_0x68e73d=_0x33a8f5['getUint32'](_0x3252b8+0x2a,!![]),_0x2512ea=_0x52d317['decode'](new Uint8Array(_0x11422c,_0x3252b8+0x2e,_0x56dd75));_0x3b77a7[_0x4328df(0x1c3)](_0x2512ea,{'compMethod':_0x47a1f9,'compSize':_0xbc78f7,'nameLen':_0x56dd75,'extraLen':_0x497d42,'localHeaderOffset':_0x68e73d}),_0x3252b8+=0x2e+_0x56dd75+_0x497d42+_0xe07d87;}return{'has'(_0x4d9ec8){const _0x19179c=_0x4328df;return _0x3b77a7[_0x19179c(0xff)](_0x4d9ec8);},async 'getBatchBlobs'(_0x1ecea7){const _0x5bfc9a=_0x4328df,_0x23bb9a=new Map(),_0x5e7c07=[];for(let _0x2adb44=0x0;_0x2adb44<_0x1ecea7['length'];_0x2adb44++){const _0x4f19b0=_0x1ecea7[_0x2adb44],_0x46eec3=_0x3b77a7[_0x5bfc9a(0x317)](_0x4f19b0[_0x5bfc9a(0x1ab)]);if(_0x46eec3&&_0x46eec3[_0x5bfc9a(0x1f1)]===0x0){const _0x48e01e=_0x46eec3['localHeaderOffset']+0x1e+_0x46eec3['nameLen']+_0x46eec3['extraLen']+_0x46eec3['compSize']+0x40;_0x5e7c07[_0x5bfc9a(0x286)]({'path':_0x4f19b0['path'],'mimeType':_0x4f19b0['mimeType'],'info':_0x46eec3,'start':_0x46eec3[_0x5bfc9a(0x1fc)],'end':Math[_0x5bfc9a(0x26a)](_0xed9e03['size'],_0x48e01e)});}}if(_0x5e7c07['length']===0x0)return _0x23bb9a;_0x5e7c07[_0x5bfc9a(0x216)]((_0x37cfd5,_0x3abb7d)=>_0x37cfd5[_0x5bfc9a(0x191)]-_0x3abb7d[_0x5bfc9a(0x191)]);const _0x17cc6e=0x18*0x400*0x400,_0xf199a1=0x200*0x400;let _0x1c8f70=_0x5e7c07[0x0][_0x5bfc9a(0x191)],_0x102b9a=_0x5e7c07[0x0]['end'],_0x568e7e=[_0x5e7c07[0x0]];async function _0x519041(_0x50e8f1,_0x37796a,_0x2f3700){const _0x178207=_0x5bfc9a,_0x46fd84=await _0xed9e03[_0x178207(0x11b)](_0x50e8f1,_0x37796a)[_0x178207(0x113)](),_0x25a82b=new DataView(_0x46fd84);for(let _0x130733=0x0;_0x130733<_0x2f3700[_0x178207(0x2e2)];_0x130733++){const _0x452795=_0x2f3700[_0x130733],_0x207d59=_0x452795[_0x178207(0x270)][_0x178207(0x1fc)]-_0x50e8f1;if(_0x207d59+0x1e>_0x46fd84[_0x178207(0x204)])continue;const _0x1b30ae=_0x25a82b[_0x178207(0xf6)](_0x207d59+0x1a,!![]),_0xe53d6f=_0x25a82b['getUint16'](_0x207d59+0x1c,!![]),_0x14ecff=_0x207d59+0x1e+_0x1b30ae+_0xe53d6f,_0x3a5277=_0x14ecff+_0x452795['info'][_0x178207(0x18f)];_0x3a5277<=_0x46fd84['byteLength']&&_0x23bb9a[_0x178207(0x1c3)](_0x452795[_0x178207(0x1ab)],new Blob([_0x46fd84[_0x178207(0x11b)](_0x14ecff,_0x3a5277)],{'type':_0x452795[_0x178207(0x18b)]}));}}for(let _0x53a5ae=0x1;_0x53a5ae<_0x5e7c07[_0x5bfc9a(0x2e2)];_0x53a5ae++){const _0xdabb25=_0x5e7c07[_0x53a5ae],_0x29bbe3=_0xdabb25['start']-_0x102b9a,_0x59c287=Math['max'](_0x102b9a,_0xdabb25['end'])-_0x1c8f70;_0x29bbe3<=_0xf199a1&&_0x59c287<=_0x17cc6e?(_0x102b9a=Math[_0x5bfc9a(0x145)](_0x102b9a,_0xdabb25[_0x5bfc9a(0x218)]),_0x568e7e[_0x5bfc9a(0x286)](_0xdabb25)):(await _0x519041(_0x1c8f70,_0x102b9a,_0x568e7e),_0x1c8f70=_0xdabb25['start'],_0x102b9a=_0xdabb25['end'],_0x568e7e=[_0xdabb25]);}if(_0x568e7e['length']>0x0)await _0x519041(_0x1c8f70,_0x102b9a,_0x568e7e);return _0x23bb9a;},async 'getText'(_0x440e2d){const _0x47f7ea=_0x4328df,_0xaad220=await this[_0x47f7ea(0x233)]([{'path':_0x440e2d,'mimeType':_0x47f7ea(0x2dc)}]),_0x47d458=_0xaad220['get'](_0x440e2d);return _0x47d458?await _0x47d458['text']():null;}};}function triggerBlobDownload(_0x4c68e8,_0x3518b8){const _0x595446=_0x52d41e,_0x3cc1b2=URL[_0x595446(0x143)](_0x4c68e8),_0x52b6a9=document[_0x595446(0x155)]('a');_0x52b6a9[_0x595446(0x1df)]=_0x3cc1b2,_0x52b6a9[_0x595446(0x1c9)]=_0x3518b8,document[_0x595446(0x227)]['appendChild'](_0x52b6a9),_0x52b6a9['click'](),document[_0x595446(0x227)][_0x595446(0x2c0)](_0x52b6a9),setTimeout(()=>URL[_0x595446(0x144)](_0x3cc1b2),0x1d4c0);}async function executeFastZipExport(_0x19f31e=!![]){const _0xbe77b=_0x52d41e,_0x39844b=await db[_0xbe77b(0x26d)][_0xbe77b(0x299)]()[_0xbe77b(0x273)](),_0x59c76e=_0x39844b['length'];if(_0x59c76e===0x0)return alert(t('保存対象のデータがありません。',_0xbe77b(0x253)));window[_0xbe77b(0x2ae)]('export_zip',{'mode':_0x19f31e?_0xbe77b(0x2d6):_0xbe77b(0x193),'total_items':_0x59c76e});const _0x82006=_0x19f31e?0xbb8:0xc350,_0x36667e=3.5*0x400*0x400*0x400,_0xfb80d1=0xfa;let _0x5d46a8=null;if(window[_0xbe77b(0xeb)]&&window[_0xbe77b(0x1e0)][_0xbe77b(0x2b5)]!==_0xbe77b(0x16d))try{_0x5d46a8=await window[_0xbe77b(0xeb)]({'mode':_0xbe77b(0x231)});}catch(_0x359a53){if(_0x359a53[_0xbe77b(0x2d5)]===_0xbe77b(0x22b))return;_0x5d46a8=null;}const _0x2d3e14=document[_0xbe77b(0x120)](_0xbe77b(0x148)),_0x3fcab9=document[_0xbe77b(0x120)](_0xbe77b(0x1a2)),_0x29f15b=document[_0xbe77b(0x120)]('progressStats'),_0x330882=document[_0xbe77b(0x120)]('progressStatus');_0x2d3e14[_0xbe77b(0xdf)][_0xbe77b(0x114)]('hidden'),_0x3fcab9[_0xbe77b(0xef)][_0xbe77b(0x17d)]='0%';const _0x579f8c=new Date()['toISOString']()[_0xbe77b(0x11b)](0x0,0xa),_0xb85775=_0x19f31e?'novelai_backup_full_'+_0x579f8c:_0xbe77b(0x134)+_0x579f8c;try{let _0x39debb=0x1,_0x55ee02=[],_0x3e9671=[],_0x224dd3=0x0,_0xe05371=0x0;async function _0x29b785(_0x33f998){const _0x5d2831=_0xbe77b;if(_0x3e9671['length']===0x0)return;const _0x2bc7cb=new TextEncoder()[_0x5d2831(0xfc)](JSON[_0x5d2831(0x1ae)](_0x3e9671));_0x55ee02[_0x5d2831(0x286)]({'path':'metadata.json','blob':new Blob([_0x2bc7cb],{'type':_0x5d2831(0x2dc)})});const _0x55a537=_0x39debb===0x1&&_0x33f998?'.zip':_0x5d2831(0x2fe)+String(_0x39debb)[_0x5d2831(0x285)](0x2,'0')+_0x5d2831(0x1d3),_0x1af75c=''+_0xb85775+_0x55a537;_0x330882[_0x5d2831(0x1b5)]=t(_0x5d2831(0x215)+_0x1af75c+'\x20('+_0x3e9671['length']+'件)...',_0x5d2831(0x267)+_0x1af75c+'\x20('+_0x3e9671[_0x5d2831(0x2e2)]+_0x5d2831(0x26f));const _0x2b946f=buildZeroCopyZipBlob(_0x55ee02);if(_0x5d46a8){const _0x4fd666=await _0x5d46a8[_0x5d2831(0x14d)](_0x1af75c,{'create':!![]}),_0x488f60=await _0x4fd666[_0x5d2831(0x196)]();await _0x488f60['write'](_0x2b946f),await _0x488f60['close']();}else{triggerBlobDownload(_0x2b946f,_0x1af75c);if(!_0x33f998)await new Promise(_0x412efa=>setTimeout(_0x412efa,0x5dc));}_0x55ee02=[],_0x3e9671=[],_0x224dd3=0x0,_0x39debb++;}for(let _0x174444=0x0;_0x174444<_0x59c76e;_0x174444+=_0xfb80d1){const _0x3bee70=_0x39844b[_0xbe77b(0x11b)](_0x174444,_0x174444+_0xfb80d1);_0x330882[_0xbe77b(0x1b5)]=_0x19f31e?t(_0xbe77b(0x1eb)+_0x39debb+_0xbe77b(0x2d8),_0xbe77b(0x24c)+_0x39debb+_0xbe77b(0x1d5)):t('軽量バックアップ構築中\x20(サムネイル＆メタデータ)...',_0xbe77b(0x293));const _0x70eb1c=await db[_0xbe77b(0x26d)][_0xbe77b(0x207)](_0x3bee70),_0x405a73=_0x19f31e?await db['images'][_0xbe77b(0x207)](_0x3bee70):null;for(let _0x1d6267=0x0;_0x1d6267<_0x3bee70[_0xbe77b(0x2e2)];_0x1d6267++){const _0x5c93ef=_0x70eb1c[_0x1d6267];if(!_0x5c93ef)continue;const _0x50755b=_0x5c93ef['id']+_0xbe77b(0x16e),_0xa244b6=_0x19f31e?_0x5c93ef['id']+'_'+(_0x5c93ef[_0xbe77b(0x295)]||'image.png'):null,_0x35fe6c=_0x5c93ef[_0xbe77b(0x22e)]||null,_0x320df1=_0x19f31e&&_0x405a73&&_0x405a73[_0x1d6267]?_0x405a73[_0x1d6267][_0xbe77b(0x1b3)]:null,_0x1313cb=(_0x35fe6c?_0x35fe6c[_0xbe77b(0x311)]:0x0)+(_0x320df1?_0x320df1[_0xbe77b(0x311)]:0x0);(_0x3e9671[_0xbe77b(0x2e2)]>=_0x82006||_0x224dd3+_0x1313cb>_0x36667e&&_0x3e9671[_0xbe77b(0x2e2)]>0x0)&&await _0x29b785(![]);_0x3e9671[_0xbe77b(0x286)]({'id':_0x5c93ef['id'],'imageHash':_0x5c93ef[_0xbe77b(0x11a)],'fileName':_0x5c93ef['fileName'],'seed':_0x5c93ef[_0xbe77b(0x118)],'prompt':_0x5c93ef[_0xbe77b(0x31b)],'uc':_0x5c93ef['uc'],'characters':_0x5c93ef[_0xbe77b(0x19b)],'createdAt':_0x5c93ef[_0xbe77b(0x2c3)],'thumbFileName':_0x35fe6c?_0x50755b:null,'rawFileName':_0x320df1?_0xa244b6:null});if(_0x35fe6c)_0x55ee02[_0xbe77b(0x286)]({'path':_0xbe77b(0x2a7)+_0x50755b,'blob':_0x35fe6c});if(_0x320df1)_0x55ee02[_0xbe77b(0x286)]({'path':_0xbe77b(0x122)+_0xa244b6,'blob':_0x320df1});_0x224dd3+=_0x1313cb,_0xe05371++;}_0x3fcab9[_0xbe77b(0xef)][_0xbe77b(0x17d)]=Math[_0xbe77b(0x304)](_0xe05371/_0x59c76e*0x64)+'%',_0x29f15b[_0xbe77b(0x1b5)]=t(_0xe05371+_0xbe77b(0x1a5)+_0x59c76e+_0xbe77b(0x1fb)+_0x39debb+')',_0xe05371+_0xbe77b(0x1a5)+_0x59c76e+_0xbe77b(0x1a8)+_0x39debb+')'),await new Promise(_0x277c2f=>setTimeout(_0x277c2f,0x0));}await _0x29b785(!![]),_0x330882[_0xbe77b(0x1b5)]=t('ZIP保存が完了しました！','ZIP\x20export\x20completed!');}catch(_0x23ebd6){console['error'](_0x23ebd6),alert(t('ZIP保存に失敗しました:\x20',_0xbe77b(0x18e))+_0x23ebd6['message']);}finally{setTimeout(()=>{const _0x3114fa=_0xbe77b;_0x2d3e14[_0x3114fa(0xdf)]['add']('hidden');},0x4b0);}}document[_0x52d41e(0x120)](_0x52d41e(0x316))[_0x52d41e(0x2a3)]=()=>executeFastZipExport(!![]),document[_0x52d41e(0x120)](_0x52d41e(0x244))[_0x52d41e(0x2a3)]=()=>executeFastZipExport(![]),document[_0x52d41e(0x120)](_0x52d41e(0x265))[_0x52d41e(0x179)]('change',async _0x2a3feb=>{const _0x548901=_0x52d41e,_0x30fa7a=Array[_0x548901(0x223)](_0x2a3feb[_0x548901(0x2fb)][_0x548901(0x255)]);if(!_0x30fa7a[_0x548901(0x2e2)])return;_0x30fa7a[_0x548901(0x216)]((_0x121d41,_0x30e6f4)=>_0x121d41[_0x548901(0x2d5)][_0x548901(0x310)](_0x30e6f4[_0x548901(0x2d5)]));const _0x3f70f2=t(_0x548901(0x1e9)+_0x30fa7a['length']+_0x548901(0x328),_0x548901(0x15d)+_0x30fa7a[_0x548901(0x2e2)]+'\x20selected\x20ZIP\x20file(s)?\x0a(Existing\x20data\x20will\x20be\x20merged)');if(!confirm(_0x3f70f2)){_0x2a3feb[_0x548901(0x2fb)][_0x548901(0x162)]='';return;}window[_0x548901(0x2ae)]('restore_zip',{'zip_count':_0x30fa7a[_0x548901(0x2e2)]});const _0x1fbd52=document[_0x548901(0x120)]('progressContainer'),_0x286d86=document[_0x548901(0x120)](_0x548901(0x1a2)),_0x3fa2f4=document[_0x548901(0x120)](_0x548901(0xf9)),_0x1770f0=document['getElementById'](_0x548901(0x203));_0x1fbd52['classList'][_0x548901(0x114)]('hidden'),_0x286d86[_0x548901(0xef)]['width']='0%';try{const _0x1fa38b=new Set(await db[_0x548901(0x26d)][_0x548901(0x29f)](_0x548901(0x11a))['keys']());let _0x8e81a3=0x0,_0x8a0fc7=0x0;const _0x327808=isMobileUI?0x50:0x64;for(let _0x2f1916=0x0;_0x2f1916<_0x30fa7a[_0x548901(0x2e2)];_0x2f1916++){const _0x3da1ac=_0x30fa7a[_0x2f1916];_0x1770f0[_0x548901(0x1b5)]=t('ZIP解析中\x20('+(_0x2f1916+0x1)+'/'+_0x30fa7a['length']+_0x548901(0x15c)+_0x3da1ac[_0x548901(0x2d5)]+_0x548901(0x213),'Parsing\x20ZIP\x20('+(_0x2f1916+0x1)+'/'+_0x30fa7a[_0x548901(0x2e2)]+'):\x20'+_0x3da1ac['name']+_0x548901(0x213));let _0x239de2=await parseZeroCopyStoreZip(_0x3da1ac),_0x450d01=null,_0x273b43=null;if(_0x239de2&&_0x239de2[_0x548901(0xff)](_0x548901(0x1a1)))_0x273b43=await _0x239de2['getText'](_0x548901(0x1a1));if(!_0x273b43){_0x239de2=null,_0x450d01=await JSZip[_0x548901(0x18a)](_0x3da1ac);const _0x3d5519=_0x450d01[_0x548901(0x13b)](_0x548901(0x1a1));if(!_0x3d5519)throw new Error(t(_0x3da1ac['name']+_0x548901(0xe5),'metadata.json\x20not\x20found\x20in\x20'+_0x3da1ac[_0x548901(0x2d5)]+'.'));_0x273b43=await _0x3d5519[_0x548901(0x1c5)]('text');}const _0x5ed4c7=JSON[_0x548901(0x27c)](_0x273b43);for(let _0x2aff25=0x0;_0x2aff25<_0x5ed4c7['length'];_0x2aff25+=_0x327808){const _0x12daf6=_0x5ed4c7[_0x548901(0x11b)](_0x2aff25,_0x2aff25+_0x327808),_0x5b8239=[],_0x457292=[];for(let _0x5b87b7=0x0;_0x5b87b7<_0x12daf6['length'];_0x5b87b7++){const _0x2410c8=_0x12daf6[_0x5b87b7];if(!_0x2410c8||_0x2410c8[_0x548901(0x11a)]&&_0x1fa38b[_0x548901(0xff)](_0x2410c8[_0x548901(0x11a)])){_0x8a0fc7++;continue;}_0x5b8239[_0x548901(0x286)](_0x2410c8);if(_0x239de2){if(_0x2410c8[_0x548901(0x225)])_0x457292[_0x548901(0x286)]({'path':'thumbnails/'+_0x2410c8[_0x548901(0x225)],'mimeType':'image/webp'});if(_0x2410c8[_0x548901(0x1de)])_0x457292[_0x548901(0x286)]({'path':'images/'+_0x2410c8[_0x548901(0x1de)],'mimeType':_0x548901(0x1ac)});}}if(_0x5b8239['length']>0x0){const _0x52499d=_0x239de2?await _0x239de2[_0x548901(0x233)](_0x457292):null,_0x202ed0=[],_0x350911=[];for(let _0x50cfb1=0x0;_0x50cfb1<_0x5b8239[_0x548901(0x2e2)];_0x50cfb1++){const _0x2ba381=_0x5b8239[_0x50cfb1];let _0x57d611=null,_0x24af26=null;if(_0x2ba381['thumbFileName']){const _0x4874c4=_0x548901(0x2a7)+_0x2ba381[_0x548901(0x225)];if(_0x52499d)_0x57d611=_0x52499d[_0x548901(0x317)](_0x4874c4)||null;else{if(_0x450d01&&_0x450d01[_0x548901(0x13b)](_0x4874c4))_0x57d611=await _0x450d01[_0x548901(0x13b)](_0x4874c4)[_0x548901(0x1c5)]('blob');}}if(_0x2ba381['rawFileName']){const _0x463b11=_0x548901(0x122)+_0x2ba381[_0x548901(0x1de)];if(_0x52499d)_0x24af26=_0x52499d[_0x548901(0x317)](_0x463b11)||null;else{if(_0x450d01&&_0x450d01[_0x548901(0x13b)](_0x463b11))_0x24af26=await _0x450d01[_0x548901(0x13b)](_0x463b11)['async'](_0x548901(0x1b3));}}const _0x3a672d=_0x2ba381[_0x548901(0x11a)]||_0x548901(0x264)+Date['now']()+'_'+_0x2f1916+'_'+(_0x2aff25+_0x50cfb1);_0x202ed0[_0x548901(0x286)]({'imageHash':_0x3a672d,'fileName':_0x2ba381['fileName']||_0x548901(0xf1),'thumbBlob':_0x57d611||_0x24af26,'prompt':_0x2ba381['prompt']||'','uc':_0x2ba381['uc']||'','seed':_0x2ba381['seed']||'','characters':_0x2ba381[_0x548901(0x19b)]||[],'createdAt':_0x2ba381[_0x548901(0x2c3)]||Date['now']()}),_0x350911[_0x548901(0x286)](_0x24af26||_0x57d611),_0x1fa38b[_0x548901(0x13d)](_0x3a672d);}if(_0x202ed0[_0x548901(0x2e2)]>0x0){const _0x188ce=await db[_0x548901(0x26d)]['bulkAdd'](_0x202ed0,{'allKeys':!![]}),_0x16ab40=[];for(let _0x377ca7=0x0;_0x377ca7<_0x188ce[_0x548901(0x2e2)];_0x377ca7++){_0x202ed0[_0x377ca7]['id']=_0x188ce[_0x377ca7],lightMetaList[_0x548901(0x286)](createLightMetaItem(_0x202ed0[_0x377ca7]));if(_0x350911[_0x377ca7])_0x16ab40['push']({'id':_0x188ce[_0x377ca7],'blob':_0x350911[_0x377ca7]});}if(_0x16ab40[_0x548901(0x2e2)]>0x0)await db[_0x548901(0x2a8)][_0x548901(0x1f4)](_0x16ab40);_0x8e81a3+=_0x202ed0[_0x548901(0x2e2)];}}const _0x25ab3b=Math[_0x548901(0x26a)](_0x2aff25+_0x327808,_0x5ed4c7[_0x548901(0x2e2)]);_0x286d86['style'][_0x548901(0x17d)]=Math[_0x548901(0x304)]((_0x2f1916+_0x25ab3b/_0x5ed4c7[_0x548901(0x2e2)])/_0x30fa7a[_0x548901(0x2e2)]*0x64)+'%',_0x3fa2f4[_0x548901(0x1b5)]=t(_0x548901(0x252)+(_0x2f1916+0x1)+'/'+_0x30fa7a['length']+'\x20('+_0x25ab3b+'/'+_0x5ed4c7[_0x548901(0x2e2)]+')\x20|\x20復元:\x20'+_0x8e81a3+'件',_0x548901(0x2fd)+(_0x2f1916+0x1)+'/'+_0x30fa7a[_0x548901(0x2e2)]+'\x20('+_0x25ab3b+'/'+_0x5ed4c7[_0x548901(0x2e2)]+_0x548901(0x320)+_0x8e81a3),await new Promise(_0x34a80a=>setTimeout(_0x34a80a,0x0));}}alert(t(_0x548901(0x289)+_0x8e81a3+_0x548901(0x19f)+_0x8a0fc7+_0x548901(0x260),_0x548901(0x174)+_0x8e81a3+'\x20item(s)\x20restored\x20('+_0x8a0fc7+_0x548901(0x326))),refreshAllViewsAfterDataChange();}catch(_0xfce27f){console['error'](_0xfce27f),alert(t(_0x548901(0x1d0),_0x548901(0xe1))+_0xfce27f[_0x548901(0x20b)]);}finally{_0x2a3feb[_0x548901(0x2fb)][_0x548901(0x162)]='',setTimeout(()=>{const _0x3da78c=_0x548901;_0x1fbd52[_0x3da78c(0xdf)][_0x3da78c(0x13d)](_0x3da78c(0x261));},0x1f4);}}),document['getElementById'](_0x52d41e(0x313))['onclick']=()=>{const _0x4d5464=_0x52d41e;window[_0x4d5464(0x2ae)](_0x4d5464(0x315)),document[_0x4d5464(0x120)]('helpModal')['classList'][_0x4d5464(0x114)](_0x4d5464(0x261));},document[_0x52d41e(0x120)](_0x52d41e(0x280))[_0x52d41e(0x2a3)]=()=>document[_0x52d41e(0x120)](_0x52d41e(0x117))[_0x52d41e(0xdf)][_0x52d41e(0x13d)]('hidden'),document[_0x52d41e(0x120)]('helpModalOkBtn')['onclick']=()=>document[_0x52d41e(0x120)](_0x52d41e(0x117))[_0x52d41e(0xdf)]['add'](_0x52d41e(0x261)),document[_0x52d41e(0x120)](_0x52d41e(0x14c))[_0x52d41e(0x2a3)]=()=>{const _0x382e03=_0x52d41e;window[_0x382e03(0x2ae)](_0x382e03(0x2f7)),document[_0x382e03(0x120)]('supportModal')[_0x382e03(0xdf)][_0x382e03(0x114)](_0x382e03(0x261)),lucide[_0x382e03(0xf3)]();},document['getElementById'](_0x52d41e(0x2bc))[_0x52d41e(0x2a3)]=()=>{const _0x3583d9=_0x52d41e;document[_0x3583d9(0x120)](_0x3583d9(0x117))[_0x3583d9(0xdf)]['add'](_0x3583d9(0x261)),document[_0x3583d9(0x120)](_0x3583d9(0x239))[_0x3583d9(0xdf)][_0x3583d9(0x114)](_0x3583d9(0x261)),lucide[_0x3583d9(0xf3)]();},document[_0x52d41e(0x120)](_0x52d41e(0x30e))['onclick']=()=>document[_0x52d41e(0x120)](_0x52d41e(0x239))[_0x52d41e(0xdf)][_0x52d41e(0x13d)](_0x52d41e(0x261)),document[_0x52d41e(0x120)](_0x52d41e(0x2ea))[_0x52d41e(0x2a3)]=()=>document[_0x52d41e(0x120)](_0x52d41e(0x239))[_0x52d41e(0xdf)]['add'](_0x52d41e(0x261)),window[_0x52d41e(0x222)]=function(_0x51fff2){const _0x400fc7=_0x52d41e;if(!_0x51fff2)return;navigator[_0x400fc7(0x15f)][_0x400fc7(0x2ee)](_0x51fff2),alert(t(_0x400fc7(0x2f0),_0x400fc7(0x125)));},window[_0x52d41e(0x13f)]=function(_0x1d4bed){const _0x508d87=_0x52d41e;return(_0x1d4bed||'')['replace'](/'/g,'\x5c\x27')[_0x508d87(0x28c)](/"/g,_0x508d87(0x13c));},window[_0x52d41e(0x179)](_0x52d41e(0x166),initLoad);</script>
+</body>
+</html>
